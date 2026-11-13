@@ -18,12 +18,12 @@ function seeded(seed: number) {
 }
 
 function polyTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(600, 1000);
+  const [c, g] = makeCanvas(900, 1500);
   const rnd = seeded(7);
   const cols = 6;
   const rows = 10;
-  const m = 16;
-  const gap = 4;
+  const m = 22;
+  const gap = 5;
   const cw = (c.width - 2 * m - (cols - 1) * gap) / cols;
   const ch = (c.height - 2 * m - (rows - 1) * gap) / rows;
   g.fillStyle = '#c9ced6';
@@ -38,10 +38,10 @@ function polyTexture(): HTMLCanvasElement {
       g.clip();
       g.fillStyle = '#16327a';
       g.fillRect(x, y, cw, ch);
-      for (let k = 0; k < 32; k++) {
+      for (let k = 0; k < 46; k++) {
         const px = x + rnd() * cw;
         const py = y + rnd() * ch;
-        const r = 8 + rnd() * 24;
+        const r = 10 + rnd() * 34;
         g.fillStyle = `hsla(${214 + rnd() * 20},${55 + rnd() * 25}%,${14 + rnd() * 20}%,.6)`;
         g.beginPath();
         for (let a = 0, n = 3 + Math.floor(rnd() * 3); a < n; a++) {
@@ -54,9 +54,17 @@ function polyTexture(): HTMLCanvasElement {
         g.closePath();
         g.fill();
       }
+      g.strokeStyle = 'rgba(205,215,235,.13)';
+      g.lineWidth = 1;
+      for (let fy = y + 3; fy < y + ch; fy += 6) {
+        g.beginPath();
+        g.moveTo(x, fy);
+        g.lineTo(x + cw, fy);
+        g.stroke();
+      }
       g.fillStyle = '#aab2bd';
       for (let b = 1; b <= 3; b++) {
-        g.fillRect(x + (cw * b) / 4 - 1.5, y, 3, ch);
+        g.fillRect(x + (cw * b) / 4 - 2, y, 4, ch);
       }
       g.restore();
     }
@@ -65,12 +73,12 @@ function polyTexture(): HTMLCanvasElement {
 }
 
 function hjtTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(600, 1000);
+  const [c, g] = makeCanvas(900, 1520);
   const cols = 6;
   const rows = 10;
-  const m = 16;
-  const gap = 4;
-  const cut = 10;
+  const m = 24;
+  const gap = 5;
+  const cut = 16;
   const cw = (c.width - 2 * m - (cols - 1) * gap) / cols;
   const ch = (c.height - 2 * m - (rows - 1) * gap) / rows;
   g.fillStyle = '#15171c';
@@ -96,9 +104,17 @@ function hjtTexture(): HTMLCanvasElement {
       grad.addColorStop(1, '#05070d');
       g.fillStyle = grad;
       g.fillRect(x, y, cw, ch);
+      g.strokeStyle = 'rgba(150,170,205,.07)';
+      g.lineWidth = 1;
+      for (let fy = y + 2; fy < y + ch; fy += 4) {
+        g.beginPath();
+        g.moveTo(x, fy);
+        g.lineTo(x + cw, fy);
+        g.stroke();
+      }
       g.fillStyle = 'rgba(185,198,220,.50)';
       for (let b = 1; b <= 9; b++) {
-        g.fillRect(x + (cw * b) / 10 - 0.6, y, 1.2, ch);
+        g.fillRect(x + (cw * b) / 10 - 0.8, y, 1.6, ch);
       }
       g.restore();
     }
@@ -107,25 +123,25 @@ function hjtTexture(): HTMLCanvasElement {
 }
 
 function cigsTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(600, 800);
+  const [c, g] = makeCanvas(900, 1160);
   const grad = g.createLinearGradient(0, 0, c.width, c.height);
   grad.addColorStop(0, '#0e1014');
   grad.addColorStop(0.5, '#08090c');
   grad.addColorStop(1, '#101216');
   g.fillStyle = grad;
   g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = 'rgba(255,255,255,.06)';
-  for (let x = 10; x < c.width - 10; x += 6) {
-    g.fillRect(x, 10, 1, c.height - 20);
+  g.fillStyle = 'rgba(255,255,255,.055)';
+  for (let x = 14; x < c.width - 14; x += 7) {
+    g.fillRect(x, 14, 1, c.height - 28);
   }
-  g.strokeStyle = 'rgba(160,170,190,.35)';
-  g.lineWidth = 2;
-  g.strokeRect(8, 8, c.width - 16, c.height - 16);
+  g.strokeStyle = 'rgba(160,170,190,.30)';
+  g.lineWidth = 3;
+  g.strokeRect(12, 12, c.width - 24, c.height - 24);
   return c;
 }
 
 function skyTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(512, 256);
+  const [c, g] = makeCanvas(1024, 512);
   const sky = g.createLinearGradient(0, 0, 0, c.height);
   sky.addColorStop(0, '#2b6cb8');
   sky.addColorStop(0.46, '#cfe2f1');
@@ -133,7 +149,7 @@ function skyTexture(): HTMLCanvasElement {
   sky.addColorStop(1, '#6d5433');
   g.fillStyle = sky;
   g.fillRect(0, 0, c.width, c.height);
-  const sun = g.createRadialGradient(165, 65, 0, 165, 65, 50);
+  const sun = g.createRadialGradient(330, 130, 0, 330, 130, 90);
   sun.addColorStop(0, 'rgba(255,255,255,1)');
   sun.addColorStop(0.25, 'rgba(255,244,214,.9)');
   sun.addColorStop(1, 'rgba(255,230,170,0)');
@@ -143,14 +159,36 @@ function skyTexture(): HTMLCanvasElement {
 }
 
 function concreteTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(256, 256);
+  const [c, g] = makeCanvas(512, 512);
   const rnd = seeded(31);
   g.fillStyle = '#b9ad9a';
-  g.fillRect(0, 0, 256, 256);
-  for (let k = 0; k < 2000; k++) {
+  g.fillRect(0, 0, 512, 512);
+  for (let k = 0; k < 5200; k++) {
     const v = 150 + rnd() * 70;
     g.fillStyle = `rgba(${v},${v - 8},${v - 22},${0.1 + rnd() * 0.16})`;
-    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 1 + rnd() * 2);
+    g.fillRect(rnd() * 512, rnd() * 512, 1 + rnd() * 2.4, 1 + rnd() * 2.4);
+  }
+  for (let k = 0; k < 16; k++) {
+    const x = rnd() * 512;
+    const y = rnd() * 512;
+    const r = 30 + rnd() * 80;
+    const st = g.createRadialGradient(x, y, 0, x, y, r);
+    st.addColorStop(0, `rgba(${rnd() < 0.5 ? '96,84,68' : '214,205,190'},.16)`);
+    st.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = st;
+    g.fillRect(x - r, y - r, 2 * r, 2 * r);
+  }
+  g.strokeStyle = 'rgba(80,70,58,.20)';
+  g.lineWidth = 1.5;
+  for (let q = 0; q <= 512; q += 256) {
+    g.beginPath();
+    g.moveTo(q, 0);
+    g.lineTo(q, 512);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(0, q);
+    g.lineTo(512, q);
+    g.stroke();
   }
   return c;
 }
@@ -216,7 +254,7 @@ function buildModuleGroup(
       metalness: 0,
       clearcoat: 1,
       clearcoatRoughness: 0.05,
-      envMapIntensity: 0.85,
+      envMapIntensity: 0.82,
     })
   );
   glass.position.z = depth / 2 - 0.004;
@@ -256,16 +294,20 @@ function buildModuleGroup(
 export function PanelThreeViewer({
   tech,
   isAr = false,
-  heightClass = 'h-[420px]',
+  heightClass = 'h-[min(56vh,480px)]',
+  getProgress,
 }: {
   tech: PanelTech;
   isAr?: boolean;
   heightClass?: string;
+  getProgress?: () => number;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const calloutRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setTechRef = useRef<((k: 'pc' | 'hjt' | 'cigs') => void) | null>(null);
+  const getProgressRef = useRef(getProgress);
+  getProgressRef.current = getProgress;
 
   const info = PANEL_TECHNOLOGIES[tech];
   const callouts = isAr ? info.calloutsAr : info.calloutsEn;
@@ -285,14 +327,14 @@ export function PanelThreeViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.94;
+    renderer.toneMappingExposure = 0.92;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 50);
     camera.position.set(0, 0.03, 4.0);
     scene.environment = buildEnvironment(renderer);
 
-    const sun = new THREE.DirectionalLight(0xfff1d6, 1.7);
+    const sun = new THREE.DirectionalLight(0xfff1d6, 1.6);
     sun.position.set(-2.5, 3, 4);
     scene.add(sun);
 
@@ -312,12 +354,13 @@ export function PanelThreeViewer({
     let curKey: 'pc' | 'hjt' | 'cigs' = techToShortKey(tech);
     modules[curKey].visible = true;
 
-    let yaw = -0.45;
-    let pitch = -0.2;
+    let yaw = -0.5;
+    let pitch = -0.22;
     let swap: { to: 'pc' | 'hjt' | 'cigs'; t0: number; done: boolean } | null = null;
+    let visible = true;
     let dragging = false;
     let last: [number, number] = [0, 0];
-    const idleFrom = performance.now();
+    let idleFrom = performance.now();
 
     setTechRef.current = (nextKey) => {
       if (nextKey === curKey) return;
@@ -330,17 +373,28 @@ export function PanelThreeViewer({
       if (!w || !h) return;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.position.z = camera.aspect < 0.78 ? 4.8 : 4.0;
+      camera.position.z = camera.aspect < 0.75 ? 4.9 : 4.0;
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
     ro.observe(host);
     resize();
 
+    const io = new IntersectionObserver(
+      (es) => {
+        visible = es[0].isIntersecting;
+      },
+      { rootMargin: '200px' }
+    );
+    io.observe(host);
+
     const onDown = (e: PointerEvent) => {
       dragging = true;
       last = [e.clientX, e.clientY];
       canvas.style.cursor = 'grabbing';
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {}
     };
     const onMove = (e: PointerEvent) => {
       if (!dragging) return;
@@ -350,25 +404,36 @@ export function PanelThreeViewer({
     };
     const onUp = () => {
       dragging = false;
+      idleFrom = performance.now();
       canvas.style.cursor = 'grab';
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') yaw -= 0.15;
+      else if (e.key === 'ArrowRight') yaw += 0.15;
+      else return;
+      e.preventDefault();
+    };
+
     canvas.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+    canvas.addEventListener('keydown', onKey);
 
     const anchorPoints = [
-      new THREE.Vector3(-0.35, 0.52, 0.03),
-      new THREE.Vector3(0.36, -0.04, 0.03),
-      new THREE.Vector3(-0.35, -0.56, 0.03),
+      new THREE.Vector3(-0.36, 0.52, 0.03),
+      new THREE.Vector3(0.38, -0.05, 0.03),
+      new THREE.Vector3(-0.38, -0.58, 0.03),
     ];
     const tmpV = new THREE.Vector3();
 
     let rafId = 0;
     const animate = (now: number) => {
       rafId = requestAnimationFrame(animate);
+      if (!visible) return;
       let spin = 0;
       if (swap) {
-        const p = Math.min(1, (now - swap.t0) / 700);
+        const p = Math.min(1, (now - swap.t0) / 750);
         const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
         spin = eased * Math.PI * 2;
         if (p >= 0.5 && !swap.done) {
@@ -379,8 +444,10 @@ export function PanelThreeViewer({
         }
         if (p >= 1) swap = null;
       }
-      const sway = dragging ? 0 : Math.sin((now - idleFrom) / 2400) * 0.16;
-      pivot.rotation.set(pitch, yaw + sway + spin, 0);
+      const sway = dragging ? 0 : Math.sin((now - idleFrom) / 2600) * 0.16;
+      const prog = getProgressRef.current ? getProgressRef.current() : 0.5;
+      const travel = (prog - 0.5) * 1.5;
+      pivot.rotation.set(pitch, yaw + sway + spin + travel, 0);
       renderer.render(scene, camera);
 
       const w = host.clientWidth;
@@ -394,7 +461,7 @@ export function PanelThreeViewer({
           const y = (-tmpV.y * 0.5 + 0.5) * h;
           el.style.left = `${x.toFixed(1)}px`;
           el.style.top = `${y.toFixed(1)}px`;
-          el.style.opacity = swap ? '0' : '0.94';
+          el.style.opacity = swap ? '0' : '0.92';
         });
       }
     };
@@ -403,9 +470,12 @@ export function PanelThreeViewer({
     return () => {
       cancelAnimationFrame(rafId);
       ro.disconnect();
+      io.disconnect();
       canvas.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener('keydown', onKey);
       renderer.dispose();
     };
   }, []);
@@ -418,8 +488,10 @@ export function PanelThreeViewer({
     <div ref={hostRef} className={`relative w-full select-none ${heightClass}`}>
       <canvas
         ref={canvasRef}
-        className="h-full w-full cursor-grab touch-pan-y block"
-        aria-label="Interactive 3D Solar Module"
+        tabIndex={0}
+        role="img"
+        className="h-full w-full cursor-grab touch-pan-y block focus-visible:outline-2 focus-visible:outline-[#ffd166]"
+        aria-label="3D model of the selected solar panel. Drag or use the arrow keys to turn it."
       />
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {callouts.map((text, idx) => (
@@ -430,17 +502,16 @@ export function PanelThreeViewer({
             }}
             className="
               absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap
-              rounded-full border border-amber-400/50 bg-[#05070f]/85 px-2.5 py-1
-              text-[11px] font-medium text-amber-100 shadow-lg backdrop-blur-md transition-opacity
+              rounded-full border border-[#ffd166]/45 bg-[#05070f]/80 px-2.5 py-0.5
+              text-[11px] text-[#f4f5fa] backdrop-blur-md transition-opacity duration-200
             "
           >
-            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
             {text}
           </div>
         ))}
       </div>
-      <div className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[11px] uppercase tracking-widest text-slate-300/80">
-        {isAr ? 'اسحب لتدوير اللوح ثلاثي الأبعاد' : 'Drag to rotate 3D module'}
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-white/70">
+        {isAr ? 'اسحب لتدوير اللوح' : 'Drag to turn the panel'}
       </div>
     </div>
   );
@@ -452,7 +523,8 @@ export function RooftopThreeViewer({
   areaM2,
   tiltDeg = 26,
   isAr = false,
-  heightClass = 'h-[400px]',
+  heightClass = 'h-[min(56vh,480px)]',
+  getProgress,
 }: {
   tech: PanelTech;
   panelCount: number;
@@ -460,9 +532,14 @@ export function RooftopThreeViewer({
   tiltDeg?: number;
   isAr?: boolean;
   heightClass?: string;
+  getProgress?: () => number;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const roofCalloutRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const getProgressRef = useRef(getProgress);
+  getProgressRef.current = getProgress;
+
   const updateRef = useRef<
     ((next: { tech: 'pc' | 'hjt' | 'cigs'; count: number; area: number; tiltDeg: number }) => void) | null
   >(null);
@@ -492,8 +569,10 @@ export function RooftopThreeViewer({
 
     const sun = new THREE.DirectionalLight(0xfff0d2, 2.4);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    scene.add(sun, sun.target, new THREE.HemisphereLight(0xcfe2ff, 0x8a7350, 0.38));
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.03;
+    scene.add(sun, sun.target, new THREE.HemisphereLight(0xcfe2ff, 0x8a7350, 0.35));
 
     const concrete = new THREE.CanvasTexture(concreteTexture());
     concrete.colorSpace = THREE.SRGBColorSpace;
@@ -516,6 +595,7 @@ export function RooftopThreeViewer({
       const spec = SPECS[k];
       const map = new THREE.CanvasTexture(spec.tex());
       map.colorSpace = THREE.SRGBColorSpace;
+      map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       const glass = new THREE.MeshPhysicalMaterial({
         map,
         roughness: 0.22,
@@ -558,14 +638,16 @@ export function RooftopThreeViewer({
     };
 
     const NORTH_STRIP = 2.4;
-    let dist = 18;
-    let wantDist = 18;
+    let cur = { tech: '' as string, count: -1, area: -1, tiltDeg: 26 };
+    let dist = 20;
+    let wantDist = 20;
     const target = new THREE.Vector3();
     const panels: THREE.Mesh[] = [];
 
     const buildRoof = (W: number, D: number) => {
       for (const m of [...building.children]) {
         building.remove(m);
+        if ((m as THREE.Mesh).geometry) (m as THREE.Mesh).geometry.dispose();
       }
       const fullD = D + NORTH_STRIP;
       const zc = -NORTH_STRIP / 2;
@@ -586,64 +668,84 @@ export function RooftopThreeViewer({
         addBox(1.8, 2.2, 1.8, mats.wall, W / 2 - 1.0, 1.1, zBack);
         addBox(0.8, 1.7, 0.05, mats.dark, W / 2 - 1.0, 0.85, zBack + 0.92);
       }
-      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.1, 24), mats.tank);
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.1, 28), mats.tank);
       tank.position.set(-W / 2 + 0.95, 1.15, zBack);
       tank.castShadow = true;
+      tank.receiveShadow = true;
       building.add(tank);
       addBox(1.0, 0.6, 1.0, mats.steel, -W / 2 + 0.95, 0.3, zBack);
     };
 
     updateRef.current = (next) => {
+      const now = performance.now();
+      const techChanged = next.tech !== cur.tech;
       const kit = panelKit[next.tech] || panelKit.pc;
       const { w: pw, h: ph } = kit.spec;
-      const W = Math.sqrt(Math.max(12, next.area) * 1.5);
-      const D = Math.max(12, next.area) / W;
-      buildRoof(W, D);
+      const safeArea = Math.max(10, next.area);
+      const W = Math.sqrt(safeArea * 1.5);
+      const D = safeArea / W;
+      if (safeArea !== cur.area) buildRoof(W, D);
 
-      const tiltRad = THREE.MathUtils.degToRad(next.tiltDeg || 26);
+      const baseTilt = THREE.MathUtils.degToRad(next.tiltDeg || 26);
       const cols = Math.max(1, Math.floor((W - 0.3) / (pw + 0.03)));
       const rows = Math.max(1, Math.ceil(Math.max(1, next.count) / cols));
-      const natural = ph * Math.cos(tiltRad);
+      const natural = ph * Math.cos(baseTilt);
       const rowPitch = Math.min(D / rows, natural + 0.85);
+      const tilt =
+        rowPitch >= natural + 0.04
+          ? baseTilt
+          : Math.acos(THREE.MathUtils.clamp((rowPitch - 0.04) / ph, 0.15, 1));
       const blockD = rows * rowPitch;
       const z0 = blockD / 2;
+      const had = panels.length;
 
-      while (panels.length > 0) {
+      while (panels.length > next.count) {
         const old = panels.pop()!;
         array.remove(old);
       }
 
       for (let k = 0; k < next.count; k++) {
-        const m = new THREE.Mesh(kit.geo, kit.mats);
-        m.castShadow = true;
-        m.receiveShadow = true;
+        let m = panels[k];
+        if (!m) {
+          m = new THREE.Mesh(kit.geo, kit.mats);
+          m.castShadow = true;
+          m.receiveShadow = true;
+          m.userData.born = now + (k - had) * 28;
+          panels.push(m);
+          array.add(m);
+        }
+        if (techChanged) {
+          m.geometry = kit.geo;
+          m.material = kit.mats;
+          m.userData.born = now + k * 14;
+        }
         const c = k % cols;
         const r = Math.floor(k / cols);
         const inRow = Math.min(cols, next.count - r * cols);
-        m.position.set(
+        m.userData.home = new THREE.Vector3(
           -(inRow * (pw + 0.03)) / 2 + (c + 0.5) * (pw + 0.03),
-          Math.sin(tiltRad) * (ph / 2) + 0.14,
+          Math.sin(tilt) * (ph / 2) + 0.14,
           z0 - rowPitch * (r + 0.5)
         );
-        m.rotation.set(-(Math.PI / 2 - tiltRad), 0, 0);
-        panels.push(m);
-        array.add(m);
+        m.rotation.set(-(Math.PI / 2 - tilt), 0, 0);
       }
 
       const R = Math.hypot(W + 1, D + NORTH_STRIP + 1) / 2;
-      wantDist = (R / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.32;
+      wantDist = (R / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.3;
+      if (cur.area < 0) dist = wantDist;
       target.set(0, 0.2, -NORTH_STRIP / 2);
       sun.position.set(-R * 1.1, R * 2.3, R * 1.5);
       sun.target.position.copy(target);
       Object.assign(sun.shadow.camera, {
-        left: -R * 1.4,
-        right: R * 1.4,
-        top: R * 1.4,
-        bottom: -R * 1.4,
+        left: -R * 1.3,
+        right: R * 1.3,
+        top: R * 1.3,
+        bottom: -R * 1.3,
         near: 0.5,
         far: R * 7,
       });
       sun.shadow.camera.updateProjectionMatrix();
+      cur = { ...next, area: safeArea };
     };
 
     const resize = () => {
@@ -652,22 +754,42 @@ export function RooftopThreeViewer({
       if (!w || !h) return;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.fov = camera.aspect < 0.9 ? 38 : 30;
+      camera.fov = camera.aspect < 0.9 ? 40 : 30;
       camera.updateProjectionMatrix();
+      if (cur.area > 0) {
+        const R =
+          Math.hypot(
+            Math.sqrt(cur.area * 1.5) + 1,
+            cur.area / Math.sqrt(cur.area * 1.5) + NORTH_STRIP + 1
+          ) / 2;
+        wantDist = (R / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.3;
+      }
     };
     const ro = new ResizeObserver(resize);
     ro.observe(host);
     resize();
 
+    let visible = true;
+    const io = new IntersectionObserver(
+      (es) => {
+        visible = es[0].isIntersecting;
+      },
+      { rootMargin: '200px' }
+    );
+    io.observe(host);
+
     let dragging = false;
     let last: [number, number] = [0, 0];
-    let yaw = 0.55;
+    let yaw = 0;
     let camPitch = 0.62;
 
     const onDown = (e: PointerEvent) => {
       dragging = true;
       last = [e.clientX, e.clientY];
       canvas.style.cursor = 'grabbing';
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {}
     };
     const onMove = (e: PointerEvent) => {
       if (!dragging) return;
@@ -679,9 +801,18 @@ export function RooftopThreeViewer({
       dragging = false;
       canvas.style.cursor = 'grab';
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') yaw -= 0.15;
+      else if (e.key === 'ArrowRight') yaw += 0.15;
+      else return;
+      e.preventDefault();
+    };
+
     canvas.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+    canvas.addEventListener('keydown', onKey);
 
     updateRef.current({
       tech: techToShortKey(tech),
@@ -689,29 +820,70 @@ export function RooftopThreeViewer({
       area: areaM2,
       tiltDeg,
     });
-    dist = wantDist;
 
+    const roofTmpV = new THREE.Vector3();
     let rafId = 0;
-    const animate = () => {
+    const animate = (now: number) => {
       rafId = requestAnimationFrame(animate);
-      dist += (wantDist - dist) * 0.1;
-      if (!dragging) yaw += 0.0012;
+      if (!visible) return;
+      for (const m of panels) {
+        const t = THREE.MathUtils.clamp((now - (m.userData.born || 0)) / 520, 0, 1);
+        const e = 1 - Math.pow(1 - t, 3);
+        const home = m.userData.home as THREE.Vector3;
+        if (home) {
+          m.position.set(home.x, home.y + (1 - e) * 2.2, home.z);
+          m.scale.setScalar(0.001 + e * 0.999);
+        }
+      }
+      dist += (wantDist - dist) * 0.08;
+      const prog = getProgressRef.current ? getProgressRef.current() : 0.5;
+      const az = 0.55 + (prog - 0.5) * 1.5 + yaw;
       camera.position.set(
-        target.x + dist * Math.sin(yaw) * Math.cos(camPitch),
+        target.x + dist * Math.sin(az) * Math.cos(camPitch),
         target.y + dist * Math.sin(camPitch),
-        target.z + dist * Math.cos(yaw) * Math.cos(camPitch)
+        target.z + dist * Math.cos(az) * Math.cos(camPitch)
       );
       camera.lookAt(target);
       renderer.render(scene, camera);
+
+      const w = host.clientWidth;
+      const h = host.clientHeight;
+      if (w && h) {
+        const anchors = [
+          {
+            pos: new THREE.Vector3(0, 1.05, 0.8),
+            label: `${panels.length} modules · ${cur.tiltDeg}° South tilt`,
+          },
+          {
+            pos: new THREE.Vector3(
+              0,
+              1.9,
+              -Math.sqrt((cur.area || 40) / 1.5) / 2 - NORTH_STRIP / 2
+            ),
+            label: 'North strip · zero array shading',
+          },
+        ];
+        anchors.forEach((a, idx) => {
+          const el = roofCalloutRefs.current[idx];
+          if (!el) return;
+          roofTmpV.copy(a.pos).project(camera);
+          el.textContent = a.label;
+          el.style.left = `${((roofTmpV.x * 0.5 + 0.5) * w).toFixed(1)}px`;
+          el.style.top = `${((-roofTmpV.y * 0.5 + 0.5) * h).toFixed(1)}px`;
+        });
+      }
     };
     rafId = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(rafId);
       ro.disconnect();
+      io.disconnect();
       canvas.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener('keydown', onKey);
       renderer.dispose();
     };
   }, []);
@@ -729,21 +901,29 @@ export function RooftopThreeViewer({
     <div ref={hostRef} className={`relative w-full select-none ${heightClass}`}>
       <canvas
         ref={canvasRef}
-        className="h-full w-full cursor-grab touch-pan-y block"
-        aria-label="Interactive 3D Egyptian Rooftop Array"
+        tabIndex={0}
+        role="img"
+        className="h-full w-full cursor-grab touch-pan-y block focus-visible:outline-2 focus-visible:outline-[#ffd166]"
+        aria-label="3D model of your roof with the panels that fit on it. Drag or use the arrow keys to turn it."
       />
-      <div className="pointer-events-none absolute top-3 left-3 flex flex-wrap gap-2">
-        <span className="rounded-full border border-teal-400/40 bg-[#05070f]/80 px-3 py-1 text-xs font-medium text-teal-200 backdrop-blur-md">
-          {panelCount} {isAr ? 'لوح شمسي' : 'modules'} · {tiltDeg}° {isAr ? 'جنوباً' : 'South tilt'}
-        </span>
-        <span className="rounded-full border border-white/15 bg-[#05070f]/80 px-3 py-1 text-xs text-slate-300 backdrop-blur-md">
-          {areaM2} m² {isAr ? 'مساحة السطح' : 'roof slab'}
-        </span>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {[0, 1].map((idx) => (
+          <div
+            key={idx}
+            ref={(el) => {
+              roofCalloutRefs.current[idx] = el;
+            }}
+            className="
+              absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap
+              rounded-full border border-[#3fc1c1]/55 bg-[#05070f]/80 px-2.5 py-0.5
+              text-[11px] text-[#f4f5fa] backdrop-blur-md
+            "
+          />
+        ))}
       </div>
-      <div className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[11px] uppercase tracking-widest text-slate-300/80">
-        {isAr ? 'اسحب لتدوير السطح ثلاثي الأبعاد' : 'Drag to orbit 3D Egyptian roof'}
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-white/70">
+        {isAr ? 'اسحب لتدوير السطح' : 'Drag to turn the roof'}
       </div>
     </div>
   );
 }
-
