@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import React, { useState, useMemo } from "react";
-import Link from "next/link";
-import { Navbar } from "@/components/Navbar";
-import { OPERATE_SITES } from "@/domain/benchmarkData";
-import { REGIONS, snapToGridCell } from "@/domain/regions";
-import { PANEL_TECHNOLOGIES } from "@/domain/panels";
-import { predictionProvider } from "@/domain/providers/predictionProvider";
-import { SkyCondition } from "@/domain/types";
+import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { Navbar } from '@/components/Navbar';
+import { OPERATE_SITES } from '@/domain/benchmarkData';
+import { REGIONS, snapToGridCell } from '@/domain/regions';
+import { PANEL_TECHNOLOGIES } from '@/domain/panels';
+import { predictionProvider } from '@/domain/providers/predictionProvider';
+import { SkyCondition } from '@/domain/types';
 
 export default function OperateDashboardPage() {
   const [selectedSiteId, setSelectedSiteId] = useState<string>(OPERATE_SITES[0].id);
-  const [mode, setMode] = useState<"replay" | "live">("replay");
+  const [mode, setMode] = useState<'replay' | 'live'>('replay');
   const [horizonH, setHorizonH] = useState<1 | 6 | 24>(24);
-  const [skyCondition, setSkyCondition] = useState<SkyCondition>("clear");
+  const [skyCondition, setSkyCondition] = useState<SkyCondition>('clear');
   const [dayOfYear, setDayOfYear] = useState<number>(172);
 
   const selectedSite = useMemo(
@@ -65,88 +65,71 @@ export default function OperateDashboardPage() {
   const maxChartPower = Math.max(selectedSite.capacityKwp, 100);
 
   return (
-    <div className="min-h-screen bg-[#0c0a08] text-[#FAF5EA]">
-      <Navbar />
+    <div className="cinematic-page pb-20 pt-8">
+      <Navbar clockLabel="12:00 · Operate Fleet" />
 
-      <div className="mx-auto max-w-[1440px] px-6 py-10">
+      <div className="mx-auto max-w-[1280px] px-4 sm:px-6">
         {/* Operate Sub-navigation & Mode Banner */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#FAF5EA]/12 pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.14] pb-6">
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#72B86A]" />
-              <span className="font-mono text-xs uppercase tracking-[0.2em] text-[#FFAA2B]">
-                SolarSense Operate · Fleet Command Center
-              </span>
-            </div>
-            <h1 className="mt-1.5 font-serif text-3xl font-semibold md:text-4xl">
+            <div className="eyebrow">SolarSense Operate · Fleet Command Center</div>
+            <h1 className="cinematic-h2 mt-2">
               Egyptian PV Fleet Forecasting &amp; Operations
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/app"
-              className="rounded-lg bg-[#FFAA2B] px-3.5 py-2 text-xs font-semibold text-[#110D08]"
-            >
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Link href="/app" className="btn-pill-primary py-2 px-4 text-xs">
               Fleet Overview
             </Link>
             <Link
               href={`/app/sites/${selectedSite.id}`}
-              className="rounded-lg border border-[#FAF5EA]/20 bg-[#18130e] px-3.5 py-2 text-xs font-medium text-[#FAF5EA]/85 hover:border-[#FFAA2B]"
+              className="btn-pill py-2 px-4 text-xs"
             >
-              Site Scheduler ({selectedSite.nameEn.split(" ")[0]})
+              Site Scheduler ({selectedSite.nameEn.split(' ')[0]})
             </Link>
-            <Link
-              href="/app/models"
-              className="rounded-lg border border-[#FAF5EA]/20 bg-[#18130e] px-3.5 py-2 text-xs font-medium text-[#FAF5EA]/85 hover:border-[#FFAA2B]"
-            >
+            <Link href="/app/models" className="btn-pill py-2 px-4 text-xs">
               Model Benchmark
             </Link>
-            <Link
-              href="/app/assistant"
-              className="rounded-lg border border-[#FAF5EA]/20 bg-[#18130e] px-3.5 py-2 text-xs font-medium text-[#FAF5EA]/85 hover:border-[#FFAA2B]"
-            >
+            <Link href="/app/assistant" className="btn-pill py-2 px-4 text-xs">
               Grounded AI Assistant
             </Link>
           </div>
         </div>
 
         {/* Provenance Mode Bar */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#FAF5EA]/15 bg-[#16120e] px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span
-              className={`rounded-md px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider ${
-                mode === "replay"
-                  ? "bg-[#72B86A]/20 text-[#72B86A]"
-                  : "bg-[#FFAA2B]/20 text-[#FFAA2B]"
-              }`}
-            >
-              {mode === "replay"
-                ? "VERIFIED ERA5 REPLAY (2026 HELD-OUT TEST)"
-                : "EXPERIMENTAL LIVE NWP (OPEN-METEO BRIDGE)"}
+        <div className="glass mt-6 flex flex-wrap items-center justify-between gap-4 py-3.5 px-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={mode === 'replay' ? 'tag-pill live' : 'tag-pill'}>
+              {mode === 'replay'
+                ? 'VERIFIED ERA5 REPLAY (2026 HELD-OUT TEST)'
+                : 'EXPERIMENTAL LIVE NWP (OPEN-METEO BRIDGE)'}
             </span>
-            <p className="text-xs text-[#FAF5EA]/75">
-              Model: {forecast.modelName} ({forecast.modelVersion}) · Cell {selectedSite.cellId}
+            <p className="text-xs text-[#b9bdcf]">
+              Model: <b className="text-white">{forecast.modelName}</b> ({forecast.modelVersion}) · Cell{' '}
+              <span className="font-mono text-[#ffd166]">{selectedSite.cellId}</span>
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setMode("replay")}
-              className={`rounded-lg px-3 py-1.5 font-mono text-xs transition ${
-                mode === "replay"
-                  ? "bg-[#72B86A] font-semibold text-[#0c0a08]"
-                  : "border border-[#FAF5EA]/15 bg-[#1d1812] text-[#FAF5EA]/70"
+              type="button"
+              onClick={() => setMode('replay')}
+              className={`rounded-full px-3.5 py-1.5 font-mono text-xs transition ${
+                mode === 'replay'
+                  ? 'bg-[#3fc1c1] font-semibold text-[#05070f]'
+                  : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf] hover:text-white'
               }`}
             >
               2026 ERA5 Held-Out Replay
             </button>
             <button
-              onClick={() => setMode("live")}
-              className={`rounded-lg px-3 py-1.5 font-mono text-xs transition ${
-                mode === "live"
-                  ? "bg-[#FFAA2B] font-semibold text-[#0c0a08]"
-                  : "border border-[#FAF5EA]/15 bg-[#1d1812] text-[#FAF5EA]/70"
+              type="button"
+              onClick={() => setMode('live')}
+              className={`rounded-full px-3.5 py-1.5 font-mono text-xs transition ${
+                mode === 'live'
+                  ? 'bg-[#f5a524] font-semibold text-[#221500]'
+                  : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf] hover:text-white'
               }`}
             >
               Experimental Live NWP
@@ -164,32 +147,30 @@ export default function OperateDashboardPage() {
               <div
                 key={site.id}
                 onClick={() => setSelectedSiteId(site.id)}
-                className={`cursor-pointer rounded-2xl border p-5 transition ${
-                  active
-                    ? "border-[#FFAA2B] bg-[#FFAA2B]/10 shadow-lg"
-                    : "border-[#FAF5EA]/12 bg-[#16120e] hover:border-[#FAF5EA]/30"
+                className={`glass-interactive cursor-pointer p-5 ${
+                  active ? 'glass-selected' : ''
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="rounded bg-[#FAF5EA]/10 px-2 py-0.5 font-mono text-[10px] text-[#FFAA2B]">
+                  <span className="tag-pill">
                     {region.code} · {site.cellId}
                   </span>
-                  <span className="font-mono text-xs text-[#72B86A]">● ONLINE</span>
+                  <span className="font-mono text-xs text-[#9fe9e9]">● ONLINE</span>
                 </div>
-                <h3 className="mt-2.5 font-serif text-lg font-semibold text-[#FAF5EA]">
+                <h3 className="mt-3 font-serif text-xl font-semibold text-white">
                   {site.nameEn}
                 </h3>
-                <p className="mt-1 text-xs text-[#FAF5EA]/65">
-                  {site.capacityKwp.toLocaleString()} kWp · {tech.key} · Tilt {site.tiltDeg}°
+                <p className="mt-1 text-xs text-[#b9bdcf]">
+                  {site.capacityKwp.toLocaleString('en-US')} kWp · {tech.key} · Tilt {site.tiltDeg}°
                 </p>
-                <div className="mt-4 flex items-center justify-between border-t border-[#FAF5EA]/10 pt-3 font-mono text-xs">
-                  <span className="text-[#FAF5EA]/60">
-                    Annual GHI: {region.avgAnnualGhiKwhM2} kWh/m²
+                <div className="mt-4 flex items-center justify-between border-t border-white/[0.12] pt-3 font-mono text-xs">
+                  <span className="text-[#b9bdcf]">
+                    GHI: {region.avgAnnualGhiKwhM2} kWh/m²
                   </span>
                   <Link
                     href={`/app/sites/${site.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="font-semibold text-[#FFAA2B] hover:underline"
+                    className="font-semibold text-[#ffd166] hover:underline"
                   >
                     Open Site →
                   </Link>
@@ -200,49 +181,48 @@ export default function OperateDashboardPage() {
         </div>
 
         {/* Main Telemetry & Forecast Section */}
-        <div className="mt-8 grid gap-8 lg:grid-cols-12">
+        <div className="mt-6 grid gap-6 lg:grid-cols-12">
           {/* Left 8 cols: Interactive P10-P90 Forecast Chart */}
-          <div className="lg:col-span-8 rounded-2xl border border-[#FAF5EA]/12 bg-[#16120e] p-6">
+          <div className="glass p-6 lg:col-span-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#FFAA2B]">
-                  Physics-Guided Neural Network (PGNN) Forecast
-                </div>
-                <h2 className="mt-1 font-serif text-2xl font-semibold">
+                <div className="eyebrow">Physics-Guided Neural Network (PGNN) Forecast</div>
+                <h2 className="mt-1.5 font-serif text-2xl font-semibold text-white">
                   {selectedSite.nameEn} — {horizonH}h Horizon
                 </h2>
               </div>
 
-              {/* Controls */}
               <div className="flex flex-wrap items-center gap-2">
                 {([1, 6, 24] as const).map((h) => (
                   <button
                     key={h}
+                    type="button"
                     onClick={() => setHorizonH(h)}
-                    className={`rounded-md px-2.5 py-1 font-mono text-xs ${
+                    className={`rounded-full px-3 py-1 font-mono text-xs transition ${
                       horizonH === h
-                        ? "bg-[#FFAA2B] font-semibold text-[#110D08]"
-                        : "border border-[#FAF5EA]/15 bg-[#1d1812] text-[#FAF5EA]/70"
+                        ? 'bg-[#f5a524] font-semibold text-[#221500]'
+                        : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf]'
                     }`}
                   >
                     {h}h
                   </button>
                 ))}
-                <span className="mx-1 text-[#FAF5EA]/20">|</span>
+                <span className="mx-1 text-white/20">|</span>
                 {(
                   [
-                    { id: "clear", label: "Clear Sky" },
-                    { id: "dust", label: "Khamaseen Dust" },
-                    { id: "cloud", label: "Cloud Transient" },
+                    { id: 'clear', label: 'Clear Sky' },
+                    { id: 'dust', label: 'Khamaseen Dust' },
+                    { id: 'cloud', label: 'Cloud Transient' },
                   ] as const
                 ).map((sc) => (
                   <button
                     key={sc.id}
+                    type="button"
                     onClick={() => setSkyCondition(sc.id)}
-                    className={`rounded-md px-2.5 py-1 font-mono text-xs ${
+                    className={`rounded-full px-3 py-1 font-mono text-xs transition ${
                       skyCondition === sc.id
-                        ? "bg-[#FAF5EA] font-semibold text-[#110D08]"
-                        : "border border-[#FAF5EA]/15 bg-[#1d1812] text-[#FAF5EA]/70"
+                        ? 'bg-[#3fc1c1] font-semibold text-[#05070f]'
+                        : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf]'
                     }`}
                   >
                     {sc.label}
@@ -252,9 +232,9 @@ export default function OperateDashboardPage() {
             </div>
 
             {/* Day of Year slider */}
-            <div className="mt-4 flex items-center gap-4 rounded-xl border border-[#FAF5EA]/10 bg-[#1d1812] px-4 py-2.5">
-              <span className="font-mono text-xs text-[#FAF5EA]/70">
-                Day of Year: <strong className="text-[#FFAA2B]">Day {dayOfYear}</strong>
+            <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-white/[0.14] bg-white/[0.03] px-4 py-2.5">
+              <span className="font-mono text-xs text-[#b9bdcf]">
+                Day of Year: <strong className="text-[#ffd166]">Day {dayOfYear}</strong>
               </span>
               <input
                 type="range"
@@ -262,33 +242,42 @@ export default function OperateDashboardPage() {
                 max={365}
                 value={dayOfYear}
                 onChange={(e) => setDayOfYear(Number(e.target.value))}
-                className="h-1.5 flex-1 cursor-pointer accent-[#FFAA2B]"
+                className="h-1.5 flex-1 cursor-pointer"
               />
               <div className="flex gap-1.5 font-mono text-[10px]">
                 <button
+                  type="button"
                   onClick={() => setDayOfYear(80)}
-                  className="rounded border border-[#FAF5EA]/15 px-2 py-0.5 hover:border-[#FFAA2B]"
+                  className="rounded-full border border-white/[0.16] px-2.5 py-0.5 text-[#b9bdcf] hover:border-[#ffd166] hover:text-white"
                 >
                   Equinox
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDayOfYear(172)}
-                  className="rounded border border-[#FAF5EA]/15 px-2 py-0.5 hover:border-[#FFAA2B]"
+                  className="rounded-full border border-white/[0.16] px-2.5 py-0.5 text-[#b9bdcf] hover:border-[#ffd166] hover:text-white"
                 >
                   Summer Peak
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDayOfYear(355)}
-                  className="rounded border border-[#FAF5EA]/15 px-2 py-0.5 hover:border-[#FFAA2B]"
+                  className="rounded-full border border-white/[0.16] px-2.5 py-0.5 text-[#b9bdcf] hover:border-[#ffd166] hover:text-white"
                 >
                   Winter Solstice
                 </button>
               </div>
             </div>
 
-            {/* SVG Fan Chart (Clear-Sky, P10-P90 band, P50 Forecast) */}
+            {/* SVG Fan Chart */}
             <div className="mt-6">
               <svg viewBox="0 0 760 290" className="w-full overflow-visible">
+                <defs>
+                  <linearGradient id="fleetPowerGrad" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0" stopColor="#f5a524" stopOpacity="0.65" />
+                    <stop offset="1" stopColor="#f5a524" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
                 {[0, 0.25, 0.5, 0.75, 1].map((frac, idx) => {
                   const y = 245 - frac * 200;
                   const val = Math.round(frac * maxChartPower);
@@ -299,14 +288,14 @@ export default function OperateDashboardPage() {
                         x2={730}
                         y1={y}
                         y2={y}
-                        stroke="rgba(250,245,234,0.08)"
+                        stroke="rgba(255,255,255,0.08)"
                         strokeDasharray="4 4"
                       />
                       <text
                         x={44}
                         y={y + 4}
                         textAnchor="end"
-                        className="fill-[#FAF5EA]/50 font-mono text-[10px]"
+                        className="fill-[#b9bdcf] font-mono text-[10px]"
                       >
                         {val} kW
                       </text>
@@ -325,55 +314,52 @@ export default function OperateDashboardPage() {
                   });
 
                   const upperPath = coords
-                    .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y90}`)
-                    .join(" ");
+                    .map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y90}`)
+                    .join(' ');
                   const lowerPath = [...coords]
                     .reverse()
                     .map((c) => `L ${c.x} ${c.y10}`)
-                    .join(" ");
+                    .join(' ');
                   const bandPath = `${upperPath} ${lowerPath} Z`;
 
                   const p50Path = coords
-                    .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y50}`)
-                    .join(" ");
+                    .map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y50}`)
+                    .join(' ');
+                  const areaFill = `${p50Path} L 720 245 L 60 245 Z`;
 
                   const clearPath = coords
-                    .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.yClear}`)
-                    .join(" ");
+                    .map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.yClear}`)
+                    .join(' ');
 
                   return (
                     <>
-                      <path d={bandPath} fill="rgba(255, 170, 43, 0.18)" />
+                      <path d={bandPath} fill="rgba(63, 193, 193, 0.18)" />
+                      <path d={areaFill} fill="url(#fleetPowerGrad)" />
                       <path
                         d={clearPath}
                         fill="none"
-                        stroke="rgba(114, 184, 106, 0.7)"
+                        stroke="#3fc1c1"
                         strokeWidth={1.75}
                         strokeDasharray="5 4"
                       />
-                      <path
-                        d={p50Path}
-                        fill="none"
-                        stroke="#FFAA2B"
-                        strokeWidth={3}
-                      />
+                      <path d={p50Path} fill="none" stroke="#ffd166" strokeWidth={3} />
                       {coords.map((c, i) => (
                         <g key={i}>
                           <circle
                             cx={c.x}
                             cy={c.y50}
-                            r={3.5}
-                            fill="#FFAA2B"
-                            stroke="#0c0a08"
+                            r={3.2}
+                            fill="#ffd166"
+                            stroke="#05070f"
                             strokeWidth={1.5}
                           />
                           <text
                             x={c.x}
                             y={268}
                             textAnchor="middle"
-                            className="fill-[#FAF5EA]/60 font-mono text-[10px]"
+                            className="fill-[#b9bdcf] font-mono text-[10px]"
                           >
-                            {String(c.pt.hourLocal).padStart(2, "0")}:00
+                            {String(c.pt.hourLocal).padStart(2, '0')}:00
                           </text>
                         </g>
                       ))}
@@ -382,22 +368,22 @@ export default function OperateDashboardPage() {
                 })()}
               </svg>
 
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-4 border-t border-[#FAF5EA]/10 pt-3 text-xs text-[#FAF5EA]/70">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.14] pt-3 text-xs text-[#b9bdcf]">
                 <div className="flex flex-wrap items-center gap-5">
                   <span className="flex items-center gap-2">
-                    <span className="inline-block h-0.5 w-4 bg-[#FFAA2B]" />
+                    <span className="inline-block h-0.5 w-4 bg-[#ffd166]" />
                     PGNN P50 Power Forecast (kW)
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className="inline-block h-3 w-4 rounded-sm bg-[#FFAA2B]/25" />
+                    <span className="inline-block h-3 w-4 rounded-sm bg-[#3fc1c1]/25" />
                     P10–P90 Confidence Interval
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className="inline-block h-0.5 w-4 border-b border-dashed border-[#72B86A]" />
+                    <span className="inline-block h-0.5 w-4 border-b border-dashed border-[#3fc1c1]" />
                     pvlib Clear-Sky Envelope
                   </span>
                 </div>
-                <span className="font-mono text-[11px] text-[#72B86A]">
+                <span className="font-mono text-[11px] text-[#9fe9e9]">
                   0.0% Physical Constraint Violations (0 ≤ P ≤ P_clear)
                 </span>
               </div>
@@ -405,73 +391,71 @@ export default function OperateDashboardPage() {
           </div>
 
           {/* Right 4 cols: Site Telemetry Summary & Action Cards */}
-          <div className="lg:col-span-4 space-y-4">
-            <div className="rounded-2xl border border-[#FAF5EA]/12 bg-[#16120e] p-6">
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#FFAA2B]">
-                Forecast Telemetry KPIs
-              </div>
-              <h3 className="mt-1 font-serif text-xl font-semibold">
+          <div className="glass flex flex-col justify-between p-6 lg:col-span-4">
+            <div>
+              <div className="eyebrow">Forecast Telemetry KPIs</div>
+              <h3 className="mt-1.5 font-serif text-2xl font-semibold text-white">
                 {selectedSite.nameEn}
               </h3>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-[#FAF5EA]/10 bg-[#1d1812] p-3.5">
-                  <div className="font-mono text-[10px] text-[#FAF5EA]/60">DAILY FORECAST YIELD</div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-[#FFAA2B]">
-                    {totalEnergyKwh.toLocaleString()} <span className="text-xs font-normal">kWh</span>
+                <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-3.5">
+                  <div className="font-mono text-[10px] text-[#b9bdcf]">DAILY FORECAST YIELD</div>
+                  <div className="mt-1 font-serif text-2xl font-semibold text-[#ffd166]">
+                    {totalEnergyKwh.toLocaleString('en-US')}{' '}
+                    <span className="text-xs font-normal text-[#b9bdcf]">kWh</span>
                   </div>
                 </div>
-                <div className="rounded-xl border border-[#FAF5EA]/10 bg-[#1d1812] p-3.5">
-                  <div className="font-mono text-[10px] text-[#FAF5EA]/60">PEAK AC POWER (P50)</div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-[#FAF5EA]">
-                    {peakPowerKw.toLocaleString()} <span className="text-xs font-normal">kW</span>
+                <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-3.5">
+                  <div className="font-mono text-[10px] text-[#b9bdcf]">PEAK AC POWER (P50)</div>
+                  <div className="mt-1 font-serif text-2xl font-semibold text-white">
+                    {peakPowerKw.toLocaleString('en-US')}{' '}
+                    <span className="text-xs font-normal text-[#b9bdcf]">kW</span>
                   </div>
                 </div>
-                <div className="rounded-xl border border-[#FAF5EA]/10 bg-[#1d1812] p-3.5">
-                  <div className="font-mono text-[10px] text-[#FAF5EA]/60">PEAK CELL TEMP (FAIMAN)</div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-[#E85D4A]">
+                <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-3.5">
+                  <div className="font-mono text-[10px] text-[#b9bdcf]">PEAK CELL TEMP (FAIMAN)</div>
+                  <div className="mt-1 font-serif text-2xl font-semibold text-[#ffd166]">
                     {peakCellTemp}°C
                   </div>
                 </div>
-                <div className="rounded-xl border border-[#FAF5EA]/10 bg-[#1d1812] p-3.5">
-                  <div className="font-mono text-[10px] text-[#FAF5EA]/60">BESS STORAGE</div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-[#72B86A]">
-                    {selectedSite.batteryKwh} <span className="text-xs font-normal">kWh</span>
+                <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-3.5">
+                  <div className="font-mono text-[10px] text-[#b9bdcf]">BESS STORAGE</div>
+                  <div className="mt-1 font-serif text-2xl font-semibold text-[#9fe9e9]">
+                    {selectedSite.batteryKwh}{' '}
+                    <span className="text-xs font-normal text-[#b9bdcf]">kWh</span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-5 space-y-2.5 border-t border-[#FAF5EA]/10 pt-4 text-xs">
+              <div className="mt-5 space-y-2.5 border-t border-white/[0.14] pt-4 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-[#FAF5EA]/65">Base Critical Site Load:</span>
-                  <span className="font-mono text-[#FAF5EA]">{selectedSite.baseLoadKw} kW</span>
+                  <span className="text-[#b9bdcf]">Base Critical Site Load:</span>
+                  <span className="font-mono text-white">{selectedSite.baseLoadKw} kW</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#FAF5EA]/65">ERA5 Grid Cell ID:</span>
-                  <span className="font-mono text-[#FAF5EA]">{selectedSite.cellId}</span>
+                  <span className="text-[#b9bdcf]">ERA5 Grid Cell ID:</span>
+                  <span className="font-mono text-white">{selectedSite.cellId}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#FAF5EA]/65">Panel Technology:</span>
-                  <span className="font-mono text-[#FFAA2B]">
+                  <span className="text-[#b9bdcf]">Panel Technology:</span>
+                  <span className="font-mono text-[#ffd166]">
                     {PANEL_TECHNOLOGIES[selectedSite.tech].nameEn}
                   </span>
                 </div>
               </div>
+            </div>
 
-              <div className="mt-6 flex flex-col gap-2.5">
-                <Link
-                  href={`/app/sites/${selectedSite.id}`}
-                  className="w-full rounded-lg bg-[#FFAA2B] py-2.5 text-center text-xs font-semibold text-[#110D08] transition hover:bg-[#FFB94A]"
-                >
-                  Open Deterministic Load Scheduler →
-                </Link>
-                <Link
-                  href="/app/assistant"
-                  className="w-full rounded-lg border border-[#FAF5EA]/20 bg-[#1d1812] py-2.5 text-center text-xs font-medium text-[#FAF5EA] transition hover:border-[#FFAA2B]"
-                >
-                  Ask Grounded AI Assistant About This Site
-                </Link>
-              </div>
+            <div className="mt-6 flex flex-col gap-2.5">
+              <Link
+                href={`/app/sites/${selectedSite.id}`}
+                className="btn-pill-primary w-full justify-center"
+              >
+                Open Deterministic Load Scheduler →
+              </Link>
+              <Link href="/app/assistant" className="btn-pill w-full justify-center">
+                Ask Grounded AI Assistant About This Site
+              </Link>
             </div>
           </div>
         </div>

@@ -1,33 +1,39 @@
-
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import Lenis from 'lenis';
 import { Navbar, useLanguage } from '@/components/Navbar';
 import { PanelThreeViewer, RooftopThreeViewer } from '@/components/SolarThreeViewers';
 import { GlobeLocationModal } from '@/components/GlobeLocationModal';
 import { runAssessment } from '@/domain/business';
-import { PANEL_TECH_LIST, normalizePanelTech } from '@/domain/panels';
+import { PANEL_TECH_LIST, normalizePanelTech, techToShortKey } from '@/domain/panels';
 import { predictionProvider } from '@/domain/providers/predictionProvider';
 import { REGIONS, snapToGridCell } from '@/domain/regions';
 import { LiveWeatherObservation, PanelTech, SitePoint } from '@/domain/types';
 import {
   Compass,
   MapPin,
-  Sparkles,
   ArrowRight,
   FileSpreadsheet,
   Box,
   Activity,
   Share2,
   Check,
-  AlertCircle,
 } from 'lucide-react';
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger);
+}
 
 interface ChapterDef {
   id: string;
   clip: string;
   mode: 'scrub' | 'play';
+  long?: boolean;
+  center?: boolean;
   from?: number;
   t0: number;
   t1: number;
@@ -42,11 +48,12 @@ const CHAPTERS: ChapterDef[] = [
     id: 'dawn',
     clip: 'sunrise',
     mode: 'scrub',
+    long: true,
     from: 0.12,
     t0: 5.2,
     t1: 6.6,
-    nameEn: 'Dawn · Hero',
-    nameAr: 'الفجر · البداية',
+    nameEn: 'Before dawn',
+    nameAr: 'قبل الفجر',
   },
   {
     id: 'dunes',
@@ -54,10 +61,10 @@ const CHAPTERS: ChapterDef[] = [
     mode: 'play',
     t0: 6.6,
     t1: 7.6,
-    nameEn: 'Early Morning',
+    nameEn: 'Early morning',
     nameAr: 'الصباح الباكر',
     grade: '#ffb35a',
-    gradeOpacity: 0.22,
+    gradeOpacity: 0.25,
   },
   {
     id: 'why',
@@ -65,35 +72,36 @@ const CHAPTERS: ChapterDef[] = [
     mode: 'play',
     t0: 7.6,
     t1: 9.0,
-    nameEn: 'Why It Is Hard',
+    nameEn: 'Why it is hard',
     nameAr: 'لماذا التنبؤ صعب؟',
   },
   {
     id: 'panel',
     clip: 'redDune',
     mode: 'play',
+    center: true,
     t0: 9.0,
-    t1: 10.2,
-    nameEn: 'Step 1 · Choose Panel',
-    nameAr: 'خطوة 1 · اختر اللوح',
+    t1: 10.0,
+    nameEn: 'Choose your panel',
+    nameAr: 'اختر اللوح الشمسي',
   },
   {
     id: 'where',
     clip: 'aswan',
     mode: 'play',
-    t0: 10.2,
-    t1: 11.6,
-    nameEn: 'Step 2 · Location',
-    nameAr: 'خطوة 2 · موقعك',
+    t0: 10.0,
+    t1: 11.5,
+    nameEn: 'Where are you?',
+    nameAr: 'أين موقعك؟',
   },
   {
     id: 'noon',
     clip: 'noon',
     mode: 'play',
-    t0: 11.6,
+    t0: 11.5,
     t1: 13.0,
-    nameEn: 'Noon · Live Sky',
-    nameAr: 'الظهيرة · طقس موقعك الآن',
+    nameEn: 'Your sky right now',
+    nameAr: 'سماء موقعك الآن',
   },
   {
     id: 'space',
@@ -101,8 +109,8 @@ const CHAPTERS: ChapterDef[] = [
     mode: 'play',
     t0: 13.0,
     t1: 15.0,
-    nameEn: 'Step 3 · Roof & Budget',
-    nameAr: 'خطوة 3 · المساحة والميزانية',
+    nameEn: 'Space and budget',
+    nameAr: 'المساحة والميزانية',
   },
   {
     id: 'predict',
@@ -110,8 +118,8 @@ const CHAPTERS: ChapterDef[] = [
     mode: 'play',
     t0: 15.0,
     t1: 16.5,
-    nameEn: 'Afternoon · Prediction',
-    nameAr: 'العصر · منحنى الإنتاج',
+    nameEn: 'Prediction',
+    nameAr: 'منحنى الإنتاج',
   },
   {
     id: 'business',
@@ -119,30 +127,41 @@ const CHAPTERS: ChapterDef[] = [
     mode: 'play',
     t0: 16.5,
     t1: 18.0,
-    nameEn: 'Golden Hour · Business Case',
-    nameAr: 'الغروب الذهبي · الجدوى المالية',
+    nameEn: 'Business case',
+    nameAr: 'دراسة الجدوى',
     grade: '#ff9a3c',
-    gradeOpacity: 0.26,
+    gradeOpacity: 0.3,
   },
   {
     id: 'dusk',
     clip: 'sunset',
     mode: 'scrub',
+    long: true,
     t0: 18.0,
-    t1: 19.5,
-    nameEn: 'Dusk · Sunset',
-    nameAr: 'الغسق · غروب الشمس',
+    t1: 19.4,
+    nameEn: 'Dusk',
+    nameAr: 'الغسق',
   },
   {
     id: 'night',
     clip: 'stars',
     mode: 'scrub',
-    t0: 19.5,
-    t1: 22.8,
-    nameEn: 'Night · Storage & CTA',
-    nameAr: 'الليل · التخزين والتقرير',
+    long: true,
+    t0: 19.4,
+    t1: 22.5,
+    nameEn: 'After dark',
+    nameAr: 'بعد الغروب',
   },
 ];
+
+function clamp(v: number, a: number, b: number): number {
+  return Math.min(b, Math.max(a, v));
+}
+
+function smoothStep(a: number, b: number, x: number): number {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+}
 
 function formatHhMm(decimalHour: number): string {
   const h = Math.floor(decimalHour);
@@ -153,12 +172,12 @@ function formatHhMm(decimalHour: number): string {
 export default function PlanDayArcPage() {
   const { isAr } = useLanguage();
 
-  // Plan flow state synced with URL query parameters
+  // Plan flow state synced with URL query parameters (defaults match day_arc_prototype.html?tech=pc&area=40&budget=180000)
   const [tech, setTech] = useState<PanelTech>('pc-Si');
-  const [site, setSite] = useState<SitePoint>(() => snapToGridCell(30.04, 31.24)); // Default Cairo
+  const [site, setSite] = useState<SitePoint>(() => snapToGridCell(30.04, 31.24));
   const [locationChosen, setLocationChosen] = useState<boolean>(false);
-  const [locationSource, setLocationSource] = useState<string>('Default (Cairo)');
-  const [usableAreaM2, setUsableAreaM2] = useState<number>(45);
+  const [locationSource, setLocationSource] = useState<string>('Cairo (default)');
+  const [usableAreaM2, setUsableAreaM2] = useState<number>(40);
   const [budgetEgp, setBudgetEgp] = useState<number>(180000);
   const [monthlyBillEgp, setMonthlyBillEgp] = useState<number>(2400);
   const [daytimeSharePct, setDaytimeSharePct] = useState<number>(45);
@@ -169,11 +188,16 @@ export default function PlanDayArcPage() {
   const [weatherLoading, setWeatherLoading] = useState<boolean>(true);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
 
-  // Scroll & Video Stage refs
+  // Scroll, GSAP & Video Stage refs
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
+  const contentRefs = useRef<(HTMLDivElement | null)[]>([]);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const gradeRef = useRef<HTMLDivElement | null>(null);
+  const lenisRef = useRef<Lenis | null>(null);
+  const progress3dRef = useRef<Record<string, number>>({ panel: 0.5, space: 0.5 });
+
   const [activeIdx, setActiveIdx] = useState<number>(0);
-  const [clockLabel, setClockLabel] = useState<string>('05:12 · Dawn');
+  const [clockLabel, setClockLabel] = useState<string>('05:12 · Before dawn');
 
   // Hydrate initial state from URL query params on mount
   useEffect(() => {
@@ -194,17 +218,18 @@ export default function PlanDayArcPage() {
     if (!Number.isNaN(bill) && bill >= 300 && bill <= 100000) setMonthlyBillEgp(bill);
   }, []);
 
-  // Sync state changes back to URL query string so any configuration is shareable
+  // Sync state changes back to URL query string
   useEffect(() => {
-    const params = new URLSearchParams();
-    params.set('tech', tech);
-    params.set('lat', site.cellLat.toFixed(2));
-    params.set('lon', site.cellLon.toFixed(2));
+    const params = new URLSearchParams(window.location.search);
+    params.set('tech', techToShortKey(tech));
     params.set('area', String(usableAreaM2));
     params.set('budget', String(budgetEgp));
-    params.set('bill', String(monthlyBillEgp));
-    window.history.replaceState(null, '', `?${params.toString()}`);
-  }, [tech, site.cellLat, site.cellLon, usableAreaM2, budgetEgp, monthlyBillEgp]);
+    if (locationChosen) {
+      params.set('lat', site.cellLat.toFixed(2));
+      params.set('lon', site.cellLon.toFixed(2));
+    }
+    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
+  }, [tech, site.cellLat, site.cellLon, locationChosen, usableAreaM2, budgetEgp]);
 
   // Fetch live Open-Meteo weather for the snapped 0.25° ERA5 cell
   useEffect(() => {
@@ -258,23 +283,95 @@ export default function PlanDayArcPage() {
     [site, tech, assessment.chosen.panelCount, assessment.chosen.kWp]
   );
 
-  // Scroll-driven video cross-fading and time-lapse scrubbing
+  // Smooth GSAP micro-transition whenever active chapter changes
   useEffect(() => {
+    const activeEl = contentRefs.current[activeIdx];
+    if (!activeEl) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const items = activeEl.querySelectorAll('[data-gsap-item]');
+    if (items.length > 0) {
+      gsap.fromTo(
+        items,
+        { y: 18, opacity: 0.25 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.75,
+          stagger: 0.055,
+          ease: 'power3.out',
+          overwrite: 'auto',
+        }
+      );
+    }
+  }, [activeIdx]);
+
+  // Lenis + GSAP Ticker + Scroll-driven video crossfading, scrubbing, and chapter easing
+  useEffect(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const portrait = window.matchMedia('(orientation: portrait)').matches;
     const uniqueClips = Array.from(new Set(CHAPTERS.map((c) => c.clip)));
-    // Preload first 2 chapters immediately
-    ['sunrise', 'dunes', 'dust'].forEach((clipKey) => {
+
+    const getClipSrc = (clipKey: string) => {
+      const file = clipKey === 'sunset' && portrait ? 'sunset_portrait' : clipKey;
+      return `/footage/web/${file}.mp4`;
+    };
+
+    const ensureVideoLoaded = (clipKey: string) => {
       const v = videoRefs.current[clipKey];
       if (v && !v.src) {
-        v.src = `/footage/web/${clipKey}.mp4`;
+        v.preload = 'auto';
+        v.src = getClipSrc(clipKey);
         v.load();
       }
-    });
+    };
 
-    let rafId = 0;
-    const onFrame = () => {
+    // Preload initial chapters immediately
+    ['sunrise', 'dunes', 'dust'].forEach(ensureVideoLoaded);
+
+    // Initialize Lenis smooth scrolling synced with GSAP ticker
+    const lenis = !reduce
+      ? new Lenis({
+          lerp: 0.082,
+          wheelMultiplier: 0.9,
+          smoothWheel: true,
+        })
+      : null;
+    lenisRef.current = lenis;
+
+    if (lenis) {
+      lenis.on('scroll', ScrollTrigger.update);
+    }
+
+    let prevActiveIdx = -1;
+    let lastScrollY = -9999;
+    let lastClockStr = '';
+
+    const scrubVideo = (ch: ChapterDef, progress: number) => {
+      const v = videoRefs.current[ch.clip];
+      if (!v || v.readyState < 1 || !Number.isFinite(v.duration)) return;
+      const from = ch.from || 0;
+      const targetTime = (reduce ? 0.6 : from + (1 - from) * progress) * (v.duration - 0.08);
+      if (!v.seeking && Math.abs(v.currentTime - targetTime) > 0.04) {
+        v.currentTime = targetTime;
+      }
+    };
+
+    const onTick = (timeSeconds: number) => {
+      if (lenis) {
+        lenis.raf(timeSeconds * 1000);
+      }
+
+      const curScrollY = window.scrollY;
+      if (Math.abs(curScrollY - lastScrollY) < 0.05 && prevActiveIdx !== -1) {
+        return;
+      }
+      lastScrollY = curScrollY;
+
       const vh = window.innerHeight || 800;
       const mid = vh / 2;
       let currentIdx = 0;
+
       const rects = CHAPTERS.map((_, i) => {
         const el = sectionRefs.current[i];
         return el ? el.getBoundingClientRect() : null;
@@ -284,47 +381,55 @@ export default function PlanDayArcPage() {
         if (r && r.top <= mid) currentIdx = idx;
       });
 
-      setActiveIdx(currentIdx);
+      if (currentIdx !== prevActiveIdx) {
+        prevActiveIdx = currentIdx;
+        setActiveIdx(currentIdx);
+        const activeCh = CHAPTERS[currentIdx];
+
+        [currentIdx - 1, currentIdx, currentIdx + 1].forEach((idx) => {
+          if (CHAPTERS[idx]) ensureVideoLoaded(CHAPTERS[idx].clip);
+        });
+
+        // Smooth GSAP grade transition
+        if (gradeRef.current) {
+          gsap.to(gradeRef.current, {
+            backgroundColor: activeCh.grade || 'rgba(0,0,0,0)',
+            opacity: activeCh.gradeOpacity || 0,
+            duration: 1.35,
+            ease: 'power2.out',
+            overwrite: 'auto',
+          });
+        }
+      }
+
       const ch = CHAPTERS[currentIdx];
       const nextCh = CHAPTERS[currentIdx + 1];
       const rect = rects[currentIdx];
 
-      // Ensure neighboring video clips are loaded
-      [currentIdx - 1, currentIdx, currentIdx + 1].forEach((idx) => {
-        const c = CHAPTERS[idx];
-        if (!c) return;
-        const v = videoRefs.current[c.clip];
-        if (v && !v.src) {
-          v.src = `/footage/web/${c.clip}.mp4`;
-          v.load();
-        }
-      });
-
-      const progress = rect
-        ? Math.max(0, Math.min(1, (mid - rect.top) / Math.max(1, rect.height)))
-        : 0;
+      const progress = rect ? clamp((mid - rect.top) / Math.max(1, rect.height), 0, 1) : 0;
       const clockTime = ch.t0 + (ch.t1 - ch.t0) * progress;
-      setClockLabel(
-        `${formatHhMm(clockTime)} · ${isAr ? ch.nameAr : ch.nameEn}`
-      );
-
-      // Compute smooth blend to next chapter over last 50% of viewport
-      const nextRect = rects[currentIdx + 1];
-      let blend = 0;
-      if (nextRect) {
-        const t = Math.max(0, Math.min(1, (nextRect.top - mid) / (vh * 0.5)));
-        blend = 1 - t * t * (3 - 2 * t);
+      const nextClockStr = `${formatHhMm(clockTime)} · ${isAr ? ch.nameAr : ch.nameEn}`;
+      if (nextClockStr !== lastClockStr) {
+        lastClockStr = nextClockStr;
+        const clockEl = document.getElementById('clock');
+        if (clockEl) {
+          clockEl.textContent = nextClockStr;
+        }
       }
+
+      // Film backdrop cross-fade tied to scroll position
+      const nextRect = rects[currentIdx + 1];
+      const blend = nextRect ? 1 - smoothStep(0, vh * 0.5, nextRect.top - mid) : 0;
 
       uniqueClips.forEach((clipKey) => {
         const v = videoRefs.current[clipKey];
         if (!v) return;
         const opacity =
           clipKey === ch.clip ? 1 : nextCh && clipKey === nextCh.clip ? blend : 0;
-        v.style.opacity = String(opacity);
+        v.style.opacity = opacity.toFixed(3);
 
         const owner = clipKey === ch.clip ? ch : nextCh;
-        const shouldPlay = opacity > 0.02 && owner?.mode === 'play';
+        const shouldPlay = opacity > 0.01 && owner?.mode === 'play' && !reduce;
         if (shouldPlay && v.paused) {
           v.play().catch(() => {});
         } else if (!shouldPlay && !v.paused) {
@@ -332,28 +437,72 @@ export default function PlanDayArcPage() {
         }
       });
 
-      // Scrub time-lapse chapters (dawn sunrise, dusk sunset, night stars)
-      if (ch.mode === 'scrub') {
-        const v = videoRefs.current[ch.clip];
-        if (v && v.readyState >= 1 && Number.isFinite(v.duration)) {
-          const from = ch.from || 0;
-          const targetTime = (from + (1 - from) * progress) * (v.duration - 0.08);
-          if (!v.seeking && Math.abs(v.currentTime - targetTime) > 0.05) {
-            v.currentTime = targetTime;
-          }
-        }
+      if (ch.mode === 'scrub') scrubVideo(ch, progress);
+      if (nextCh && blend > 0 && nextCh.mode === 'scrub') scrubVideo(nextCh, 0);
+
+      // Smooth chapter content entrance & exit transform (matching day_arc_prototype.html)
+      if (!reduce) {
+        [currentIdx - 1, currentIdx, currentIdx + 1].forEach((j) => {
+          const el = contentRefs.current[j];
+          const r = rects[j];
+          if (!el || !r) return;
+          const q = -r.top / vh;
+          const remaining = (r.bottom - vh) / vh;
+          const inn = j === 0 ? 1 : smoothStep(-0.6, 0.02, q);
+          const out = j === CHAPTERS.length - 1 ? 1 : smoothStep(0, 0.42, remaining);
+          const alpha = inn * out;
+          const ty = (1 - inn) * 64 - (1 - out) * 44;
+          el.style.opacity = alpha.toFixed(3);
+          el.style.transform = `translate3d(0, ${ty.toFixed(1)}px, 0)`;
+        });
       }
 
-      rafId = requestAnimationFrame(onFrame);
+      // Update 3D scroll progress for Panel & Roof viewers
+      [currentIdx - 1, currentIdx, currentIdx + 1].forEach((j) => {
+        const c = CHAPTERS[j];
+        const r = rects[j];
+        if (c && r) {
+          progress3dRef.current[c.id] = clamp((vh - r.top) / (r.height + vh), 0, 1);
+        }
+      });
     };
 
-    rafId = requestAnimationFrame(onFrame);
-    return () => cancelAnimationFrame(rafId);
+    gsap.ticker.add(onTick);
+    gsap.ticker.lagSmoothing(0);
+
+    return () => {
+      gsap.ticker.remove(onTick);
+      if (lenis) {
+        lenis.destroy();
+        lenisRef.current = null;
+      }
+    };
   }, [isAr]);
 
-  const scrollToChapter = (id: string) => {
+  // Pause Lenis while 3D Globe modal is open
+  useEffect(() => {
+    if (!lenisRef.current) return;
+    if (globeOpen) {
+      lenisRef.current.stop();
+      document.body.style.overflow = 'hidden';
+    } else {
+      lenisRef.current.start();
+      document.body.style.overflow = '';
+    }
+  }, [globeOpen]);
+
+  const scrollToChapter = (id: string, offsetFraction = 0) => {
     const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    if (!el) return;
+    const targetTop = el.offsetTop + (offsetFraction ? window.innerHeight * offsetFraction : 2);
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(targetTop, {
+        duration: 1.75,
+        easing: (t: number) => 1 - Math.pow(1 - t, 4),
+      });
+    } else {
+      window.scrollTo({ top: targetTop, behavior: 'smooth' });
+    }
   };
 
   const handleCopyShareLink = () => {
@@ -362,14 +511,13 @@ export default function PlanDayArcPage() {
     setTimeout(() => setCopiedUrl(false), 2500);
   };
 
-  const activeChapter = CHAPTERS[activeIdx] || CHAPTERS[0];
   const regionInfo = REGIONS[site.region];
   const uniqueClips = useMemo(() => Array.from(new Set(CHAPTERS.map((c) => c.clip))), []);
 
-  // SVG Forecast Curve coordinates
+  // SVG Forecast Curve coordinates (matching prototype curve layout + clear-sky reference)
   const maxChartKw = Math.max(1, assessment.chosen.kWp);
   const svgPoints = forecast.points.map((pt, idx) => {
-    const x = 50 + (idx / Math.max(1, forecast.points.length - 1)) * 700;
+    const x = 40 + (idx / Math.max(1, forecast.points.length - 1)) * 720;
     const yMean = 190 - (pt.pKw / maxChartKw) * 150;
     const yP10 = 190 - (pt.p10Kw / maxChartKw) * 150;
     const yP90 = 190 - (pt.p90Kw / maxChartKw) * 150;
@@ -383,7 +531,7 @@ export default function PlanDayArcPage() {
   const clearPath = svgPoints
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.yClear.toFixed(1)}`)
     .join(' ');
-  const areaFillPath = `${meanPath} L750 190 L50 190 Z`;
+  const areaFillPath = `${meanPath} L760 190 L40 190 Z`;
   const bandPath =
     svgPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.yP90.toFixed(1)}`).join(' ') +
     ' ' +
@@ -393,13 +541,14 @@ export default function PlanDayArcPage() {
       .join(' ') +
     ' Z';
 
+  const peakKw = Math.max(...forecast.points.map((p) => p.pKw), 0);
   const reportHref = `/report/${assessment.id}?tech=${tech}&lat=${site.cellLat}&lon=${site.cellLon}&area=${usableAreaM2}&budget=${budgetEgp}&bill=${monthlyBillEgp}`;
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen bg-[#05070f] text-[#f4f5fa]">
       <Navbar clockLabel={clockLabel} />
 
-      {/* Fixed Film Backdrop Stage */}
+      {/* Fixed Film Backdrop Stage (matches day_arc_prototype.html .stage) */}
       <div className="fixed inset-0 z-0 overflow-hidden bg-[#05070f]" aria-hidden="true">
         {uniqueClips.map((clipKey) => (
           <video
@@ -412,29 +561,27 @@ export default function PlanDayArcPage() {
             loop
             preload="none"
             poster={`/footage/web/${clipKey}.jpg`}
-            className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300"
+            className="absolute inset-0 h-full w-full object-cover opacity-0 will-change-[opacity]"
           />
         ))}
         <div
-          className="pointer-events-none absolute inset-0 mix-blend-soft-light transition-all duration-1000"
-          style={{
-            backgroundColor: activeChapter.grade || 'transparent',
-            opacity: activeChapter.gradeOpacity || 0,
-          }}
+          ref={gradeRef}
+          className="pointer-events-none absolute inset-0 mix-blend-soft-light"
+          style={{ backgroundColor: 'transparent', opacity: 0 }}
         />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, rgba(5,7,15,0.68) 0%, rgba(5,7,15,0.22) 28%, rgba(5,7,15,0.38) 56%, rgba(5,7,15,0.85) 100%)',
+              'linear-gradient(180deg, rgba(5,7,15,0.55) 0%, rgba(5,7,15,0.12) 26%, rgba(5,7,15,0.30) 52%, rgba(5,7,15,0.78) 100%)',
           }}
         />
       </div>
 
-      {/* Right-hand Progress Rail (Dawn -> Night) */}
-      <aside
-        className="fixed right-4 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-2.5 lg:flex"
-        aria-label="Day Arc Chapters"
+      {/* Right-hand Progress Rail (matches day_arc_prototype.html .rail) */}
+      <nav
+        className="fixed right-[18px] top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-[11px] md:flex"
+        aria-label="Chapters"
       >
         {CHAPTERS.map((ch, idx) => (
           <button
@@ -442,14 +589,15 @@ export default function PlanDayArcPage() {
             type="button"
             onClick={() => scrollToChapter(ch.id)}
             title={isAr ? ch.nameAr : ch.nameEn}
-            className={`h-2.5 w-2.5 rounded-full transition-all ${
+            aria-label={isAr ? ch.nameAr : ch.nameEn}
+            className={`h-[9px] w-[9px] rounded-full transition-all duration-300 ${
               idx === activeIdx
-                ? 'scale-125 bg-amber-400 ring-4 ring-amber-400/25'
+                ? 'bg-[#ffd166] shadow-[0_0_0_4px_rgba(255,209,102,0.28)]'
                 : 'bg-white/35 hover:bg-white/75'
             }`}
           />
         ))}
-      </aside>
+      </nav>
 
       {/* Main Scroll Chapters */}
       <main className="relative z-10">
@@ -459,47 +607,49 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[0] = el;
           }}
-          className="relative min-h-[210vh]"
+          className="relative min-h-[260vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-20 pt-24">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="max-w-2xl">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                  {isAr ? 'سولار سينس · مصر · يوم كامل مع الشمس' : 'SolarSense · Egypt · One Day of Sun'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[0] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div className="max-w-[660px]">
+                <div data-gsap-item className="eyebrow">
+                  {isAr ? 'سولار سينس · مصر' : 'SolarSense · Egypt'}
                 </div>
-                <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.06] text-white drop-shadow-lg sm:text-6xl">
+                <h1 data-gsap-item className="cinematic-h1 mt-3 mb-4">
                   {isAr
                     ? 'اعرف ما ستمنحه لك الشمس قبل أن تشتري لوحاً واحداً.'
                     : 'Know what the sun will give you before you buy a single panel.'}
                 </h1>
-                <p className="mt-4 max-w-xl text-base text-slate-200/95 sm:text-lg">
+                <p data-gsap-item className="cinematic-lede mb-6">
                   {isAr
-                    ? 'اختر تكنولوجيا اللوح، حدد موقعك في أقاليم مصر المناخية الأربعة، وشاهد الإنتاج المتوقع والتكلفة وفترة الاسترداد بدقة فيزيائية.'
-                    : 'Inspect three solar technologies in 3D, locate your 25 km climate cell on the satellite globe, and see your live sky, roof layout, power curve, and 25-year payback.'}
+                    ? 'اختر اللوح الشمسي، حدد مكانك في مصر، وشاهد ما سينتجه وما سيكلفه ومتى يسترد تكلفته.'
+                    : 'Choose a panel, find your place in Egypt, and see what it will produce, what it will cost and when it pays back.'}
                 </p>
-                <div className="mt-6 flex flex-wrap items-center gap-3">
+                <div data-gsap-item className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={() => scrollToChapter('panel')}
-                    className="rounded-full bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400"
+                    className="btn-pill-primary"
                   >
-                    {isAr ? 'ابدأ رحلة التخطيط ↓' : 'Start planning your roof ↓'}
+                    <span>{isAr ? 'ابدأ التخطيط من الفجر ↓' : 'Start planning your roof ↓'}</span>
                   </button>
-                  <Link
-                    href={reportHref}
-                    className="rounded-full border border-white/25 bg-white/10 px-5 py-3 text-sm font-medium text-white backdrop-blur-md transition hover:border-amber-400"
-                  >
-                    {isAr ? 'معاينة التقرير المالي المباشر' : 'Open instant financial report'}
+                  <Link href={reportHref} className="btn-pill">
+                    <span>{isAr ? 'معاينة التقرير المالي' : 'Sample engineering report'}</span>
                   </Link>
-                  <Link
-                    href="/app"
-                    className="rounded-full border border-teal-400/40 bg-teal-500/15 px-5 py-3 text-sm font-medium text-teal-200 backdrop-blur-md transition hover:bg-teal-500/25"
-                  >
-                    {isAr ? 'لوحة تشغيل المحطات (Operate)' : 'Operator Dashboard (Operate)'}
+                  <Link href="/app" className="btn-pill">
+                    <span>{isAr ? 'مركز التشغيل (Operate)' : 'Fleet Operate Center'}</span>
                   </Link>
                 </div>
-                <div className="mt-8 text-xs uppercase tracking-[0.18em] text-amber-200/80">
-                  {isAr ? 'مرر للأسفل لترفع الشمس في السماء ↓' : 'Scroll to raise the sun over the desert ↓'}
+                <div
+                  data-gsap-item
+                  className="mt-7 font-mono text-xs uppercase tracking-[0.16em] text-white/85"
+                >
+                  {isAr ? 'مرر للأسفل لترفع الشمس ↓' : 'Scroll to raise the sun ↓'}
                 </div>
               </div>
             </div>
@@ -512,23 +662,28 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[1] = el;
           }}
-          className="relative min-h-[140vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-20 pt-24">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="max-w-2xl">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                  {isAr ? 'الصباح الباكر · إمكانات مصر الشمسية' : '06:45 · Early Morning'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[1] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div className="max-w-[640px]">
+                <div data-gsap-item className="eyebrow">
+                  {isAr ? 'الصباح الباكر' : 'Early morning'}
                 </div>
-                <h2 className="mt-2 font-serif text-3xl font-semibold text-white sm:text-5xl">
+                <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-3.5">
                   {isAr
                     ? 'تمتلك مصر سطوعاً شمسياً يفوق معظم بقاع الأرض.'
                     : 'Egypt has more sun than almost anywhere on Earth.'}
                 </h2>
-                <p className="mt-4 text-base text-slate-200 sm:text-lg">
+                <p data-gsap-item className="cinematic-lede">
                   {isAr
-                    ? 'أكثر من 11 ساعة إشعاع يومياً، ومستهدف وطني للوصول إلى 42% طاقة متجددة بحلول 2030. التحدي ليس وجود الشمس، بل حساب ما سينتجه سطحك أنت تحديداً.'
-                    : 'Up to eleven hours a day and a 42% national renewable target by 2030. The hard part was never whether the sun shines—it is knowing how much of it your specific panels will turn into power on your roof.'}
+                    ? 'أكثر من إحدى عشرة ساعة يومياً. لم تكن المشكلة يوماً هل تشرق الشمس، بل معرفة كم ستحول ألواحك منها إلى طاقة هنا، على هذا السطح تحديداً.'
+                    : 'Up to eleven hours of it a day. The hard part was never whether the sun shines. It is knowing how much of it your panels will turn into power, here, on this roof.'}
                 </p>
               </div>
             </div>
@@ -541,46 +696,51 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[2] = el;
           }}
-          className="relative min-h-[150vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-24">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                {isAr ? 'الصباح · فيزياء الغلاف الجوي' : '08:00 · Why Solar Forecasting Is Hard'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[2] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'الصباح · لماذا الأمر صعب' : 'Morning · why it is hard'}
               </div>
-              <h2 className="mt-2 font-serif text-3xl font-semibold text-white sm:text-5xl">
-                {isAr ? 'حركة الشمس حتمية. أما حالة السماء فلا.' : 'Sun geometry is predictable. The sky is not.'}
+              <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-5">
+                {isAr ? 'الشمس يمكن التنبؤ بها. أما السماء فلا.' : 'The sun is predictable. The sky is not.'}
               </h2>
-              <div className="mt-8 grid gap-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-5 backdrop-blur-xl">
-                  <div className="font-serif text-xl font-semibold text-amber-300">
-                    {isAr ? '1. غبار الخماسين والعوالق' : '1. Khamaseen Dust & Aerosols'}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">
+              <div className="grid gap-3.5 md:grid-cols-3">
+                <div data-gsap-item className="glass">
+                  <b className="block font-serif text-[21px] font-semibold text-white mb-1">
+                    {isAr ? 'الغبار والعوالق' : 'Dust'}
+                  </b>
+                  <span className="text-[14px] text-[#b9bdcf]">
                     {isAr
-                      ? 'تخفض العواصف الترابية الربيعية الإشعاع الكلي (GHI) بنسبة تصل إلى 13% والإشعاع المباشر (DNI) حتى 41%، وتترك طبقة غبار على الزجاج.'
-                      : 'Spring Khamaseen dust plumes cut GHI by up to ~13% and direct normal irradiance (DNI) by up to ~41% climatologically, leaving a soiling film on glass.'}
-                  </p>
+                      ? 'رياح الخماسين الربيعية تحجب جزءاً كبيراً من الإشعاع المباشر (حتى 41% من DNI) وتترك طبقة على الزجاج.'
+                      : 'Spring Khamaseen winds can strip a large share of direct sunlight on a bad day, and leave a film on the glass.'}
+                  </span>
                 </div>
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-5 backdrop-blur-xl">
-                  <div className="font-serif text-xl font-semibold text-amber-300">
-                    {isAr ? '2. الفقد الحراري للخلايا (γ)' : '2. Cell Thermal Derating (γ)'}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">
+                <div data-gsap-item className="glass">
+                  <b className="block font-serif text-[21px] font-semibold text-white mb-1">
+                    {isAr ? 'الحرارة' : 'Heat'}
+                  </b>
+                  <span className="text-[14px] text-[#b9bdcf]">
                     {isAr
-                      ? 'تتجاوز حرارة الألواح في الصعيد 60°م. كل درجة فوق 25°م تخصم من القدرة حسب المعامل الحراري لنوع اللوح.'
-                      : 'Summer panels in Upper Egypt exceed 60°C. Every degree above 25°C costs output according to your module’s temperature coefficient γ.'}
-                  </p>
+                      ? 'الألواح الساخنة تفقد جزءاً من قدرتها فوق 25°م. مقدار الفقد يعتمد على المعامل الحراري (γ) للوح الذي تختاره.'
+                      : 'Hot panels lose output above 25°C. How much depends on the thermal coefficient (γ) of the panel you choose.'}
+                  </span>
                 </div>
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-5 backdrop-blur-xl">
-                  <div className="font-serif text-xl font-semibold text-amber-300">
-                    {isAr ? '3. أربعة أقاليم مناخية مختلفة' : '3. Four Distinct Egyptian Skies'}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">
+                <div data-gsap-item className="glass">
+                  <b className="block font-serif text-[21px] font-semibold text-white mb-1">
+                    {isAr ? 'أربع سماوات' : 'Four skies'}
+                  </b>
+                  <span className="text-[14px] text-[#b9bdcf]">
                     {isAr
-                      ? 'الساحل الشمالي والدلتا، الصحراء الغربية، سيناء والبحر الأحمر، ووادي النيل والصعيد: لكل إقليم لوح أمثل مختلف.'
-                      : 'North Coast & Delta, Western Desert, Sinai & Red Sea, and Nile Valley & Upper Egypt each demand a different optimal module technology.'}
-                  </p>
+                      ? 'الساحل الرطب والدلتا، الصحراء الغربية، سيناء والبحر الأحمر، ووادي النيل والصعيد لكل منها سلوك مختلف.'
+                      : 'The humid coast, the Western Desert, Sinai and the Red Sea, and the Nile Valley all behave differently.'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -593,35 +753,31 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[3] = el;
           }}
-          className="relative min-h-[165vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                    {isAr ? 'منتصف الصباح · الخطوة 1' : '09:30 · Step 1: Choose Your Panel Technology'}
-                  </div>
-                  <h2 className="mt-1 font-serif text-3xl font-semibold text-white sm:text-4xl">
-                    {isAr ? 'ثلاث تقنيات لالتقاط نفس الضوء' : 'Three ways to catch the same light'}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => scrollToChapter('where')}
-                  className="flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400"
-                >
-                  <span>{isAr ? 'التالي: حدد موقعك' : 'Continue to location'}</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+          <div className="sticky top-0 flex min-h-screen items-center px-6 py-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[3] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'منتصف الصباح · خطوة 1' : 'Mid-morning · step 1'}
               </div>
+              <h2 data-gsap-item className="cinematic-h2 mt-2 mb-4">
+                {isAr ? 'ثلاث طرق لالتقاط نفس الضوء' : 'Three ways to catch the same light'}
+              </h2>
 
-              <div className="mt-5 grid items-center gap-6 lg:grid-cols-12">
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/65 p-3 backdrop-blur-xl lg:col-span-5">
-                  <PanelThreeViewer tech={tech} isAr={isAr} heightClass="h-[370px]" />
-                </div>
+              <div className="grid items-center gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <PanelThreeViewer
+                  tech={tech}
+                  isAr={isAr}
+                  heightClass="h-[260px] sm:h-[min(56vh,480px)]"
+                  getProgress={() => progress3dRef.current.panel ?? 0.5}
+                />
 
-                <div className="grid gap-3.5 lg:col-span-7">
+                <div className="grid gap-3.5">
                   {PANEL_TECH_LIST.map((item) => {
                     const selected = item.key === tech;
                     const recForRegion = regionInfo.recommendedTech === item.key;
@@ -629,68 +785,67 @@ export default function PlanDayArcPage() {
                       <button
                         key={item.key}
                         type="button"
+                        aria-pressed={selected}
                         onClick={() => setTech(item.key)}
-                        className={`w-full rounded-2xl border p-4 text-left transition backdrop-blur-xl ${
-                          selected
-                            ? 'border-amber-400 bg-amber-950/45 shadow-lg shadow-amber-500/10'
-                            : 'border-white/15 bg-[#0a0d1c]/70 hover:border-white/35'
+                        className={`glass-interactive w-full text-left px-4 py-3.5 ${
+                          selected ? 'glass-selected' : ''
                         }`}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <div>
-                            <h3 className="font-serif text-xl font-semibold text-white">
+                            <h3 className="font-serif text-[20px] font-semibold text-white">
                               {isAr ? item.nameAr : item.nameEn}
                             </h3>
-                            <div className="text-xs text-slate-300">
+                            <small className="block text-[13px] text-[#b9bdcf]">
                               {isAr ? item.subtitleAr : item.subtitleEn}
-                            </div>
+                            </small>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {recForRegion && (
-                              <span className="rounded-full bg-teal-500/20 px-2.5 py-0.5 text-[11px] font-medium text-teal-300">
-                                {isAr ? `الأنسب لإقليم ${regionInfo.code}` : `Best for ${regionInfo.code}`}
-                              </span>
-                            )}
-                            {selected && (
-                              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold text-slate-950">
-                                {isAr ? 'محدد ✓' : 'Selected ✓'}
-                              </span>
-                            )}
-                          </div>
+                          {recForRegion && (
+                            <span className="tag-pill live">
+                              {isAr ? `الأنسب لـ ${regionInfo.code}` : `Best for ${regionInfo.code}`}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-white/10 pt-2.5 text-xs sm:grid-cols-4">
-                          <div>
-                            <span className="text-slate-400">{isAr ? 'الكفاءة' : 'Efficiency'}</span>
-                            <div className="font-semibold text-white">{item.efficiencyRange}</div>
-                          </div>
-                          <div>
-                            <span className="text-slate-400">{isAr ? 'الفقد الحراري γ' : 'Heat coeff γ'}</span>
-                            <div className="font-semibold text-amber-300">{item.tempCoeffRange}</div>
-                          </div>
-                          <div>
-                            <span className="text-slate-400">{isAr ? 'المساحة / ك.و' : 'Roof / kWp'}</span>
-                            <div className="font-semibold text-white">{item.areaPerKwpLabel}</div>
-                          </div>
-                          <div>
-                            <span className="text-slate-400">{isAr ? 'الفئة السعرية' : 'Price tier'}</span>
-                            <div className="font-semibold text-white">
-                              {item.priceTier} ({item.panelWp} Wp)
-                            </div>
-                          </div>
+                        <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-white/[0.16] pt-2.5 text-[13px] sm:grid-cols-[1fr_auto_1fr_auto]">
+                          <span className="text-[#b9bdcf]">{isAr ? 'الكفاءة' : 'Efficiency'}</span>
+                          <span className="text-right font-semibold text-white">
+                            {item.efficiencyRange}
+                          </span>
+                          <span className="text-[#b9bdcf]">
+                            {isAr ? 'الفقد لكل °م' : 'Loss per °C of heat'}
+                          </span>
+                          <span className="text-right font-semibold text-[#ffd166]">
+                            {item.tempCoeffRange}
+                          </span>
+                          <span className="text-[#b9bdcf]">
+                            {isAr ? 'المساحة لكل ك.و' : 'Roof per kWp'}
+                          </span>
+                          <span className="text-right font-semibold text-white">
+                            {item.areaPerKwpLabel}
+                          </span>
+                          <span className="text-[#b9bdcf]">
+                            {isAr ? 'الفئة السعرية' : 'Price tier'}
+                          </span>
+                          <span className="text-right font-semibold text-white">
+                            {item.priceTier}
+                          </span>
                         </div>
                       </button>
                     );
                   })}
-                  <div className="text-[11px] text-slate-400">
-                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-300">
-                      Assumption
-                    </span>{' '}
-                    {isAr
-                      ? 'القيم تمثل النطاقات القياسية للتقنيات الثلاث وتتم مقارنة الثلاثة معاً على سطحك في الفصل الثامن.'
-                      : 'Textbook module parameters; Chapter 8 compares all three side-by-side on your exact roof.'}
-                  </div>
                 </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#b9bdcf]">
+                <span>
+                  {isAr
+                    ? 'نطاقات قياسية للتقنيات الثلاث، وتتم مقارنتها جميعاً على سطحك في الفصل الثامن.'
+                    : 'Typical module ranges; all three technologies are compared side-by-side on your roof in Golden Hour.'}
+                </span>
+                <Link href="/panels" className="text-[#ffd166] hover:underline">
+                  {isAr ? 'فتح مختبر فيزياء الألواح 3D ←' : 'Open 3D Module Physics Lab →'}
+                </Link>
               </div>
             </div>
           </div>
@@ -702,60 +857,42 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[4] = el;
           }}
-          className="relative min-h-[155vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="max-w-2xl">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                  {isAr ? 'الضحى · الخطوة 2: الموقع والأقاليم الأربعة' : '10:45 · Step 2: Where in Egypt Are You?'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[4] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div className="max-w-[640px]">
+                <div data-gsap-item className="eyebrow">
+                  {isAr ? 'الضحى · خطوة 2' : 'Late morning · step 2'}
                 </div>
-                <h2 className="mt-2 font-serif text-3xl font-semibold text-white sm:text-5xl">
-                  {isAr ? 'كل سماء في مصر لها بصمتها. أيّها سماؤك؟' : 'Every sky in Egypt is different. Which one is yours?'}
-                </h2>
-                <p className="mt-3 text-base text-slate-200">
+                <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-3.5">
                   {isAr
-                    ? 'نطابق موقعك مع خلية بيانات ERA5 (بدقة 0.25° × 0.25° من إجمالي 990 خلية تغطي مصر) ونحدد إقليمك المناخي.'
-                    : 'We match your position to one of the 990 ERA5 reanalysis grid cells (0.25° × 0.25°, ~25 km) and classify your climate region.'}
+                    ? 'كل سماء في مصر مختلفة. أيّها سماؤك؟'
+                    : 'Every sky in Egypt is different. Which one is yours?'}
+                </h2>
+                <p data-gsap-item className="cinematic-lede mb-5">
+                  {isAr
+                    ? 'نحدد موقعك على الكرة الأرضية، ثم نطابقه مع إقليمك المناخي وأقرب خلية بيانات طقس (25 كم).'
+                    : 'We find you on the globe, then match you to your climate region and the nearest weather data.'}
                 </p>
 
-                <div className="mt-6 rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-5 backdrop-blur-xl">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-wider text-slate-400">
-                        {isAr ? 'الموقع المحدد حالياً' : 'Active Site & Climate Region'}
-                      </div>
-                      <div className="mt-1 font-serif text-2xl font-semibold text-white">
-                        {site.anchorName ? `${site.anchorName} · ` : ''}
-                        {isAr ? regionInfo.nameAr : regionInfo.nameEn}{' '}
-                        <span className="rounded-full bg-teal-500/20 px-2.5 py-0.5 font-sans text-xs text-teal-300">
-                          {regionInfo.code}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-slate-300">
-                        ERA5 Cell: <b>{site.cellLat.toFixed(2)}° N, {site.cellLon.toFixed(2)}° E</b> ·{' '}
-                        {locationSource} ·{' '}
-                        {site.inCoverage
-                          ? isAr
-                            ? 'ضمن التغطية المباشرة'
-                            : 'Inside archive coverage'
-                          : isAr
-                            ? `أقرب خلية (${site.distanceKm} كم)`
-                            : `Snapped to nearest cell (${site.distanceKm} km)`}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2.5">
+                {!locationChosen ? (
+                  <div data-gsap-item>
+                    <div className="flex flex-wrap items-center gap-3">
                       <button
                         type="button"
                         onClick={() => {
                           setGlobeAutoLocate(true);
                           setGlobeOpen(true);
                         }}
-                        className="flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-xs font-semibold text-slate-950 shadow-lg shadow-amber-500/25 hover:bg-amber-400"
+                        className="btn-pill-primary"
                       >
-                        <Compass className="h-4 w-4" />
-                        <span>{isAr ? 'حدد موقعي تلقائياً' : 'Find my location'}</span>
+                        <span>{isAr ? 'حدد موقعي' : 'Find my location'}</span>
                       </button>
                       <button
                         type="button"
@@ -763,21 +900,46 @@ export default function PlanDayArcPage() {
                           setGlobeAutoLocate(false);
                           setGlobeOpen(true);
                         }}
-                        className="flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 py-2.5 text-xs font-medium text-white hover:border-amber-400"
+                        className="btn-pill"
                       >
-                        <MapPin className="h-4 w-4 text-amber-400" />
-                        <span>{isAr ? 'اختر على الكرة الأرضية 3D' : 'Choose on 3D Globe'}</span>
+                        <span>{isAr ? 'اختر على الخريطة' : 'Choose on the map'}</span>
+                      </button>
+                    </div>
+                    <div className="mt-3 text-[12px] text-[#b9bdcf]">
+                      {isAr
+                        ? 'يبقى موقعك الدقيق داخل هذه الصفحة. يُرسل فقط مربع الطقس (25 كم) الذي يقع فيه لخدمة الطقس.'
+                        : 'Your exact position stays in this page. Only the 25 km weather grid square it falls in is sent to the weather service.'}
+                    </div>
+                  </div>
+                ) : (
+                  <div data-gsap-item className="glass">
+                    <div className="flex flex-col gap-1">
+                      <div className="text-[12px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                        {isAr ? 'موقعك' : 'Your place'}
+                      </div>
+                      <div className="font-serif text-[clamp(22px,2.8vw,32px)] leading-[1.1] text-white">
+                        {isAr ? regionInfo.nameAr : regionInfo.nameEn}
+                      </div>
+                      <div className="text-[13px] text-[#b9bdcf]">
+                        {isAr
+                          ? `خلية بيانات الطقس ${site.cellLat.toFixed(2)}° شمالاً، ${site.cellLon.toFixed(2)}° شرقاً${site.inCoverage ? '' : ' (أقرب خلية مغطاة)'} · حدود الأقاليم مبدئية`
+                          : `Weather data cell ${site.cellLat.toFixed(2)}° N, ${site.cellLon.toFixed(2)}° E${site.inCoverage ? '' : ' (nearest covered cell)'} · region borders provisional`}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGlobeAutoLocate(false);
+                          setGlobeOpen(true);
+                        }}
+                        className="btn-pill"
+                      >
+                        {isAr ? 'تغيير الموقع' : 'Change location'}
                       </button>
                     </div>
                   </div>
-
-                  <div className="mt-4 border-t border-white/10 pt-3 text-xs text-slate-300">
-                    <b className="text-amber-300">
-                      {isAr ? 'تأثير الإقليم على الألواح:' : 'Regional PV Impact:'}
-                    </b>{' '}
-                    {isAr ? regionInfo.pvBehaviourAr : regionInfo.pvBehaviourEn}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -789,134 +951,126 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[5] = el;
           }}
-          className="relative min-h-[150vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                    {isAr ? 'الظهيرة · سماء موقعك الآن' : '12:00 Noon · Your Sky Right Now'}
-                  </div>
-                  <h2 className="mt-1 font-serif text-3xl font-semibold text-white sm:text-5xl">
-                    {isAr ? 'هذا ما يراه نموذج التنبؤ في هذه اللحظة.' : 'This is what the model sees.'}
-                  </h2>
-                </div>
-                <span className="rounded-full border border-teal-400/40 bg-teal-500/20 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-teal-200">
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[5] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'الظهيرة · سماء موقعك الآن' : 'Noon · your sky right now'}
+              </div>
+              <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-3">
+                {isAr ? 'هذا ما يراه نموذج التنبؤ.' : 'This is what the model sees.'}
+              </h2>
+              <p data-gsap-item className="cinematic-lede mb-5">
+                {isAr
+                  ? 'نفس القياسات الفيزيائية التي تدرب عليها نموذج التنبؤ، مقروءة مباشرة لموقعك.'
+                  : 'The same measurements the forecast was trained on, read live for your location.'}{' '}
+                <span className="tag-pill live align-middle">
                   {weatherLoading
                     ? isAr
-                      ? 'جاري جلب الطقس الحي...'
-                      : 'Fetching Open-Meteo...'
+                      ? 'جاري التحميل'
+                      : 'loading'
                     : weather?.provider === 'open-meteo-live'
-                      ? isAr
-                        ? 'بيانات حية · Open-Meteo IFS'
-                        : 'Live · Open-Meteo IFS Feed'
-                      : isAr
-                        ? 'وضع محاكاة ERA5'
-                        : 'ERA5 Reference Mode'}
+                      ? 'live'
+                      : 'era5-ref'}
                 </span>
-              </div>
-
-              <p className="mt-2 max-w-2xl text-sm text-slate-200">
-                {isAr
-                  ? 'نفس المتغيرات الفيزيائية التي تدرب عليها النموذج في أرشيف ERA5، مقروءة مباشرة لخليتك المناخية.'
-                  : 'The exact meteorological variables our ERA5 → pvlib pipeline uses, read live for your 0.25° grid cell.'}
               </p>
 
-              <div className="mt-6 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الإشعاع الكلي (ssrd / GHI)' : 'Global Sunlight (ssrd / GHI)'}
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الإشعاع على الأرض' : 'Sunlight on the ground'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-amber-300">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
                     {weather ? weather.shortwaveRadiationWm2 : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">W/m²</div>
+                  <div className="text-[13px] text-[#b9bdcf]">W/m²</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الإشعاع المباشر (fdir)' : 'Direct Radiation (fdir)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الإشعاع المباشر' : 'Direct sunlight'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-white">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
                     {weather ? weather.directRadiationWm2 : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">W/m²</div>
+                  <div className="text-[13px] text-[#b9bdcf]">W/m²</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'درجة حرارة الهواء (t2m)' : 'Air Temperature (t2m)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'حرارة الهواء' : 'Air temperature'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-white">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
                     {weather ? weather.temperature2mC : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">°C</div>
+                  <div className="text-[13px] text-[#b9bdcf]">°C</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'سرعة الرياح (u10, v10)' : '10m Wind Speed (ws10)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الرياح' : 'Wind'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-white">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
                     {weather ? weather.windSpeed10mKmh : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">km/h (panel cooling)</div>
+                  <div className="text-[13px] text-[#b9bdcf]">km/h</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الغطاء السحابي (tcc)' : 'Cloud Cover (tcc)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الغطاء السحابي' : 'Cloud cover'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-white">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
                     {weather ? weather.cloudCoverPct : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">%</div>
+                  <div className="text-[13px] text-[#b9bdcf]">%</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الرطوبة النسبية / نقطة الندى' : 'Humidity / Dewpoint (d2m)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الرطوبة' : 'Humidity'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-white">
-                    {weather ? `${weather.relativeHumidityPct}%` : '–'}
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
+                    {weather ? weather.relativeHumidityPct : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">
-                    {weather ? `Dewpoint ${weather.dewPoint2mC}°C` : ''}
-                  </div>
+                  <div className="text-[13px] text-[#b9bdcf]">%</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الضغط الجوي (sp)' : 'Surface Pressure (sp)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الضغط الجوي' : 'Pressure'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-white">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
                     {weather ? weather.surfacePressureHpa : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">hPa</div>
+                  <div className="text-[13px] text-[#b9bdcf]">hPa</div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/75 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'مؤشر الغبار والعوالق (AOD)' : 'Dust / Aerosol Index (AOD)'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'مؤشر الغبار (AOD)' : 'Dust index (AOD)'}
                   </div>
-                  <div className="mt-1 font-serif text-3xl font-semibold text-teal-300">
+                  <div className="mt-1 font-serif text-[28px] leading-[1.15] text-[#9fe9e9]">
                     {weather ? weather.dustAod : '–'}
                   </div>
-                  <div className="text-xs text-slate-400">
-                    {regionInfo.dustRisk} {isAr ? 'خطر الغبار' : 'dust profile'}
-                  </div>
+                  <div className="text-[13px] text-[#b9bdcf]">{regionInfo.dustRisk} profile</div>
                 </div>
               </div>
 
-              <div className="mt-3 text-xs text-slate-400">
+              <div className="mt-3 text-xs text-[#b9bdcf]">
                 {weather
-                  ? `${site.anchorName || 'Grid Cell'} (${site.cellLat.toFixed(2)}° N, ${site.cellLon.toFixed(2)}° E) · ${weather.timestamp} Africa/Cairo.`
+                  ? `${site.anchorName || 'Grid cell'} (${site.cellLat.toFixed(2)}° N, ${site.cellLon.toFixed(2)}° E), ${weather.timestamp} local time. Weather data by Open-Meteo.com.`
                   : ''}{' '}
                 {!locationChosen &&
                   (isAr
-                    ? 'يُعرض طقس القاهرة افتراضياً حتى تختار موقعاً آخر.'
-                    : 'Showing Cairo by default until you pick another site.')}
+                    ? 'تُعرض القاهرة حتى يتم اختيار موقع.'
+                    : 'Cairo is shown until a location is chosen.')}
               </div>
             </div>
           </div>
@@ -928,142 +1082,95 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[6] = el;
           }}
-          className="relative min-h-[165vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                    {isAr ? 'بداية العصر · الخطوة 3: المساحة والميزانية' : '13:30 · Step 3: Your Roof Space & Budget'}
-                  </div>
-                  <h2 className="mt-1 font-serif text-3xl font-semibold text-white sm:text-4xl">
-                    {isAr ? 'كم مساحة سطحك، وما هي ميزانيتك؟' : 'How much roof, and how much budget?'}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => scrollToChapter('business')}
-                  className="flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400"
-                >
-                  <span>{isAr ? 'اعرض الجدوى المالية ←' : 'See business case →'}</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[6] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'بداية العصر · خطوة 3' : 'Early afternoon · step 3'}
               </div>
+              <h2 data-gsap-item className="cinematic-h2 mt-2 mb-4">
+                {isAr
+                  ? 'كم مساحة السطح، وكم الميزانية؟'
+                  : 'How much roof, and how much budget?'}
+              </h2>
 
-              <div className="mt-5 grid items-center gap-6 lg:grid-cols-12">
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/70 p-3 backdrop-blur-xl lg:col-span-6">
-                  <RooftopThreeViewer
-                    tech={tech}
-                    panelCount={assessment.chosen.panelCount}
-                    areaM2={usableAreaM2}
-                    tiltDeg={Math.round(site.cellLat * 0.9)}
-                    isAr={isAr}
-                    heightClass="h-[380px]"
-                  />
-                </div>
+              <div className="grid items-center gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <RooftopThreeViewer
+                  tech={tech}
+                  panelCount={assessment.chosen.panelCount}
+                  areaM2={usableAreaM2}
+                  tiltDeg={Math.round(site.cellLat * 0.9)}
+                  isAr={isAr}
+                  heightClass="h-[260px] sm:h-[min(56vh,480px)]"
+                  getProgress={() => progress3dRef.current.space ?? 0.5}
+                />
 
-                <div className="grid gap-3.5 lg:col-span-6">
-                  <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                    <div className="flex justify-between text-xs text-slate-300">
-                      <label htmlFor="area-slider">
-                        {isAr ? 'مساحة السطح المتاحة (م²)' : 'Usable Roof Area (m²)'}
-                      </label>
-                      <span className="font-serif text-xl font-semibold text-amber-300">
-                        {usableAreaM2} m²
-                      </span>
-                    </div>
+                <div className="grid gap-3.5">
+                  <div className="glass">
+                    <label htmlFor="area" className="block text-[13px] text-[#b9bdcf] mb-1">
+                      {isAr ? 'مساحة السطح المتاحة' : 'Usable roof area'}
+                    </label>
                     <input
-                      id="area-slider"
+                      id="area"
                       type="range"
-                      min={15}
-                      max={250}
+                      min={10}
+                      max={200}
                       step={5}
                       value={usableAreaM2}
                       onChange={(e) => setUsableAreaM2(Number(e.target.value))}
-                      className="mt-2 w-full accent-amber-500"
+                      className="w-full"
                     />
+                    <div className="mt-1 font-serif text-[24px] text-white">
+                      <span>{usableAreaM2}</span> m²
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                    <div className="flex justify-between text-xs text-slate-300">
-                      <label htmlFor="budget-slider">
-                        {isAr ? 'الميزانية المتاحة (جنيه مصري)' : 'Target Budget (EGP)'}
-                      </label>
-                      <span className="font-serif text-xl font-semibold text-amber-300">
-                        EGP {budgetEgp.toLocaleString()}
-                      </span>
-                    </div>
+                  <div className="glass">
+                    <label htmlFor="budget" className="block text-[13px] text-[#b9bdcf] mb-1">
+                      {isAr ? 'الميزانية' : 'Budget'}
+                    </label>
                     <input
-                      id="budget-slider"
+                      id="budget"
                       type="range"
                       min={50000}
-                      max={800000}
+                      max={600000}
                       step={10000}
                       value={budgetEgp}
                       onChange={(e) => setBudgetEgp(Number(e.target.value))}
-                      className="mt-2 w-full accent-amber-500"
+                      className="w-full"
                     />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-3.5 backdrop-blur-xl">
-                      <div className="flex justify-between text-xs text-slate-300">
-                        <label htmlFor="bill-slider">
-                          {isAr ? 'الفاتورة الشهرية' : 'Monthly Bill'}
-                        </label>
-                        <span className="font-semibold text-white">
-                          EGP {monthlyBillEgp.toLocaleString()}
-                        </span>
-                      </div>
-                      <input
-                        id="bill-slider"
-                        type="range"
-                        min={500}
-                        max={20000}
-                        step={250}
-                        value={monthlyBillEgp}
-                        onChange={(e) => setMonthlyBillEgp(Number(e.target.value))}
-                        className="mt-2 w-full accent-amber-500"
-                      />
-                    </div>
-
-                    <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-3.5 backdrop-blur-xl">
-                      <div className="flex justify-between text-xs text-slate-300">
-                        <label htmlFor="daytime-slider">
-                          {isAr ? 'الاستهلاك النهاري' : 'Daytime Use Share'}
-                        </label>
-                        <span className="font-semibold text-white">{daytimeSharePct}%</span>
-                      </div>
-                      <input
-                        id="daytime-slider"
-                        type="range"
-                        min={20}
-                        max={90}
-                        step={5}
-                        value={daytimeSharePct}
-                        onChange={(e) => setDaytimeSharePct(Number(e.target.value))}
-                        className="mt-2 w-full accent-amber-500"
-                      />
+                    <div className="mt-1 font-serif text-[24px] text-white">
+                      EGP <span>{budgetEgp.toLocaleString('en-US')}</span>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-amber-400/40 bg-amber-950/40 p-4 backdrop-blur-xl">
-                    <div className="text-xs uppercase tracking-wider text-amber-300">
-                      {isAr ? 'النظام المتوافق مع سطحك وميزانيتك' : 'Fits Your Roof & Budget'}
+                  <div className="glass">
+                    <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                      {isAr ? 'يتناسب مع سطحك وميزانيتك' : 'Fits your roof and budget'}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
-                      <div className="font-serif text-3xl font-semibold text-white">
-                        {assessment.chosen.panelCount} {isAr ? 'لوح' : 'panels'} ·{' '}
-                        <span className="text-amber-300">{assessment.chosen.kWp} kWp</span>
-                      </div>
-                      <span className="rounded-full bg-amber-500/25 px-3 py-1 text-xs font-semibold text-amber-200">
-                        {isAr ? 'الحد الحاكم:' : 'Binding limit:'}{' '}
-                        {assessment.chosen.bindingLimit.toUpperCase()}
-                      </span>
+                    <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
+                      <span>{assessment.chosen.panelCount}</span> {isAr ? 'لوحاً' : 'panels'}
+                    </div>
+                    <div className="mt-1 text-[13px] text-[#b9bdcf]">
+                      <span>{assessment.chosen.kWp.toFixed(2)}</span> kWp ·{' '}
+                      {isAr ? 'محدود بـ ' : 'limited by '}
+                      <b className="text-[#ffd166]">{assessment.chosen.bindingLimit}</b>
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-3 text-xs text-[#b9bdcf]">
+                <span className="tag-pill mr-2">simulated sizing</span>
+                {isAr
+                  ? 'يحسب عدد الألواح باستخدام معامل تعبئة 0.70 وأسعار مصر المرجعية الموثقة.'
+                  : 'Panel count uses a 0.70 roof packing factor and documented Egyptian turnkey reference prices.'}
               </div>
             </div>
           </div>
@@ -1075,98 +1182,82 @@ export default function PlanDayArcPage() {
           ref={(el) => {
             sectionRefs.current[7] = el;
           }}
-          className="relative min-h-[150vh]"
+          className="relative min-h-[170vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                    {isAr ? 'العصر · منحنى القدرة المتوقع' : '15:30 · Afternoon: Your Day of Power'}
-                  </div>
-                  <h2 className="mt-1 font-serif text-3xl font-semibold text-white sm:text-5xl">
-                    {isAr ? 'منحنى التوليد الساعي مع نطاق عدم اليقين (P10–P90)' : 'Hourly output curve with P10–P90 uncertainty band'}
-                  </h2>
-                </div>
-                <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-medium text-amber-300">
-                  {isAr ? 'تقدير فيزيائي محاكي (PVWatts + الأطلس)' : 'Simulated Estimate · PVWatts + Yield Atlas'}
-                </span>
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[7] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'العصر · التنبؤ' : 'Afternoon · prediction'}
               </div>
+              <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-4">
+                {isAr ? 'يومك من الطاقة' : 'Your day of power'}
+              </h2>
 
-              <div className="mt-6 rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-5 backdrop-blur-xl">
+              <div data-gsap-item className="glass">
                 <svg
-                  viewBox="0 0 800 225"
-                  className="w-full h-auto overflow-visible"
+                  viewBox="0 0 800 220"
+                  className="block h-auto w-full"
                   role="img"
-                  aria-label="Hourly solar power curve with P10-P90 uncertainty band and clear-sky envelope"
+                  aria-label="Hourly solar power curve across a day with P10-P90 uncertainty band"
                 >
                   <defs>
                     <linearGradient id="powerGrad" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#f5a524" stopOpacity="0.65" />
-                      <stop offset="100%" stopColor="#f5a524" stopOpacity="0.0" />
+                      <stop offset="0" stopColor="#f5a524" stopOpacity="0.75" />
+                      <stop offset="1" stopColor="#f5a524" stopOpacity="0" />
                     </linearGradient>
                   </defs>
-                  {/* Grid lines */}
-                  {[50, 95, 140, 190].map((y) => (
-                    <line
-                      key={y}
-                      x1="50"
-                      x2="750"
-                      y1={y}
-                      y2={y}
-                      stroke="rgba(255,255,255,0.08)"
-                      strokeDasharray="4 4"
-                    />
-                  ))}
-                  {/* P10-P90 Band */}
-                  <path d={bandPath} fill="rgba(63, 193, 193, 0.22)" />
+                  {/* P10-P90 Uncertainty Band */}
+                  <path d={bandPath} fill="rgba(255,209,102,0.18)" />
                   {/* Area under expected curve */}
                   <path d={areaFillPath} fill="url(#powerGrad)" />
-                  {/* Clear-sky dashed reference */}
+                  {/* Clear-sky reference envelope */}
                   <path
                     d={clearPath}
                     fill="none"
-                    stroke="#3fc1c1"
-                    strokeWidth="2"
-                    strokeDasharray="5 5"
+                    stroke="rgba(63,193,193,0.65)"
+                    strokeWidth="1.75"
+                    strokeDasharray="5 4"
                   />
                   {/* Expected AC power curve */}
-                  <path d={meanPath} fill="none" stroke="#ffd166" strokeWidth="3.5" />
-
-                  {/* X-axis labels */}
-                  <g fill="#b9bdcf" fontSize="12">
-                    <text x="50" y="212">05:00</text>
-                    <text x="225" y="212">09:00</text>
-                    <text x="400" y="212" textAnchor="middle">12:00 Noon</text>
-                    <text x="575" y="212">15:00</text>
-                    <text x="730" y="212">19:00</text>
+                  <path d={meanPath} fill="none" stroke="#ffd166" strokeWidth="3" />
+                  <g fill="#b9bdcf" fontSize="12" className="font-mono">
+                    <text x="40" y="212">
+                      06:00
+                    </text>
+                    <text x="385" y="212">
+                      12:00
+                    </text>
+                    <text x="725" y="212">
+                      18:00
+                    </text>
                   </g>
+                  <text
+                    x="400"
+                    y="26"
+                    textAnchor="middle"
+                    fill="#fff"
+                    fontSize="15"
+                    className="font-serif"
+                  >
+                    {peakKw > 0
+                      ? isAr
+                        ? `الذروة حوالي ${peakKw.toFixed(1)} كيلوواط عند الظهيرة`
+                        : `Peak about ${peakKw.toFixed(1)} kW around noon`
+                      : ''}
+                  </text>
                 </svg>
+              </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-3 text-xs text-slate-300">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <span className="flex items-center gap-1.5">
-                      <i className="inline-block h-2.5 w-2.5 rounded-full bg-amber-300" />
-                      {isAr ? 'التوليد المتوقع (kW)' : 'Expected AC Power (kW)'}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <i className="inline-block h-2.5 w-2.5 rounded-full bg-teal-400/50" />
-                      {isAr ? 'نطاق الثقة P10–P90' : 'P10–P90 Uncertainty Band'}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <i className="inline-block h-0.5 w-4 bg-teal-400" />
-                      {isAr ? 'سقف السماء الصافية (P_clear)' : 'Clear-Sky Envelope (P_clear)'}
-                    </span>
-                  </div>
-                  <div>
-                    {isAr ? 'الإنتاج السنوي المتوقع:' : 'Annual Yield:'}{' '}
-                    <b className="text-amber-300">
-                      {assessment.chosen.annualKwh.toLocaleString()} kWh/yr
-                    </b>{' '}
-                    ({assessment.chosen.specificYield} kWh/kWp · PR{' '}
-                    {Math.round(assessment.chosen.performanceRatio * 100)}%)
-                  </div>
-                </div>
+              <div className="mt-3 text-xs text-[#b9bdcf]">
+                <span className="tag-pill mr-2">simulated shape</span>
+                {isAr
+                  ? `منحنى القدرة الساعي ونطاق عدم اليقين P10–P90 محسوبان لخلية ERA5 (${site.cellLat.toFixed(2)}°N, ${site.cellLon.toFixed(2)}°E).`
+                  : `Hourly AC power curve and P10–P90 uncertainty band simulated via PVWatts + ERA5 cell (${site.cellLat.toFixed(2)}°N, ${site.cellLon.toFixed(2)}°E).`}
               </div>
             </div>
           </div>
@@ -1180,352 +1271,285 @@ export default function PlanDayArcPage() {
           }}
           className="relative min-h-[175vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                {isAr ? 'الساعة الذهبية · دراسة الجدوى والمقارنة' : '17:00 Golden Hour · The Business Case'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[8] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'الساعة الذهبية · دراسة الجدوى' : 'Golden hour · the business case'}
               </div>
-              <h2 className="mt-1 font-serif text-3xl font-semibold text-white sm:text-5xl">
-                {isAr ? 'سطحك بالأرقام: مقارنة التقنيات الثلاث' : 'Your roof, in numbers'}
+              <h2 data-gsap-item className="cinematic-h2 mt-2 mb-4">
+                {isAr ? 'سطحك، بالأرقام' : 'Your roof, in numbers'}
               </h2>
 
-              {/* 5 Top KPIs */}
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'حجم النظام' : 'System Size'}
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-5">
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'النظام' : 'System'}
                   </div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-white">
-                    {assessment.chosen.kWp} kWp
+                  <div className="mt-1 font-serif text-[26px] leading-[1.15] whitespace-nowrap text-white">
+                    {assessment.chosen.kWp.toFixed(2)} kWp
                   </div>
-                  <div className="text-xs text-slate-400">
-                    {assessment.chosen.panelCount} × {assessment.chosen.tech}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'التكلفة الإجمالية' : 'Installed Cost'}
-                  </div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-amber-300">
-                    EGP {assessment.chosen.capexEgp.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-slate-400">
-                    {isAr ? 'شامل الإنفرتر والتركيب' : 'Turnkey CAPEX'}
+                  <div className="text-[13px] text-[#b9bdcf]">
+                    {assessment.chosen.panelCount} × {assessment.chosen.nameEn}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الإنتاج السنوي' : 'Annual Energy'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'التكلفة' : 'Cost'}
                   </div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-white">
-                    {assessment.chosen.annualKwh.toLocaleString()} kWh
+                  <div className="mt-1 font-serif text-[26px] leading-[1.15] whitespace-nowrap text-white">
+                    EGP {assessment.chosen.capexEgp.toLocaleString('en-US')}
                   </div>
-                  <div className="text-xs text-teal-300">
-                    {isAr
-                      ? `يغطي ${assessment.chosen.billCoveragePct}% من فاتورتك`
-                      : `Covers ${assessment.chosen.billCoveragePct}% of bill`}
+                  <div className="text-[13px] text-[#b9bdcf]">
+                    {isAr ? 'شامل التركيب' : 'installed'}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'الوفر السنوي' : 'Annual Saving'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الطاقة' : 'Energy'}
                   </div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-emerald-300">
-                    EGP {assessment.chosen.annualSavingEgp.toLocaleString()}
+                  <div className="mt-1 font-serif text-[26px] leading-[1.15] whitespace-nowrap text-white">
+                    {assessment.chosen.annualKwh.toLocaleString('en-US')} kWh
                   </div>
-                  <div className="text-xs text-slate-400">
-                    {assessment.chosen.co2AvoidedKgYear.toLocaleString()} kg CO₂/yr
+                  <div className="text-[13px] text-[#b9bdcf]">
+                    {isAr ? 'سنوياً' : 'per year'}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                    {isAr ? 'فترة الاسترداد' : 'Simple Payback'}
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الوفر' : 'Saving'}
                   </div>
-                  <div className="mt-1 font-serif text-2xl font-semibold text-amber-300">
-                    {assessment.chosen.simplePaybackYears} {isAr ? 'سنوات' : 'years'}
+                  <div className="mt-1 font-serif text-[26px] leading-[1.15] whitespace-nowrap text-white">
+                    EGP {assessment.chosen.annualSavingEgp.toLocaleString('en-US')}
                   </div>
-                  <div className="text-xs text-slate-400">
-                    25-yr NPV: EGP {assessment.chosen.npv25YrEgp.toLocaleString()}
+                  <div className="text-[13px] text-[#b9bdcf]">
+                    {isAr ? 'سنوياً' : 'per year'}
+                  </div>
+                </div>
+
+                <div data-gsap-item className="glass">
+                  <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                    {isAr ? 'الاسترداد' : 'Payback'}
+                  </div>
+                  <div className="mt-1 font-serif text-[26px] leading-[1.15] whitespace-nowrap text-white">
+                    {assessment.chosen.simplePaybackYears} {isAr ? 'سنة' : 'years'}
+                  </div>
+                  <div className="text-[13px] text-[#b9bdcf]">
+                    {isAr ? 'استرداد بسيط' : 'simple'}
                   </div>
                 </div>
               </div>
 
-              {/* Binding Limit Banner */}
-              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-400/35 bg-[#0a0d1c]/85 px-4 py-3 text-xs backdrop-blur-xl">
-                <span className="rounded-full bg-amber-500 px-3 py-1 font-bold uppercase text-slate-950">
+              <div
+                data-gsap-item
+                className="glass mt-3 flex flex-wrap items-center gap-3 py-3.5 px-4"
+              >
+                <span className="tag-pill">
                   {assessment.chosen.bindingLimit === 'area'
                     ? isAr
                       ? 'المساحة هي الحد الحاكم'
-                      : 'Roof Area Is Your Limit'
-                    : assessment.chosen.bindingLimit === 'budget'
-                      ? isAr
-                        ? 'الميزانية هي الحد الحاكم'
-                        : 'Budget Is Your Limit'
-                      : isAr
-                        ? 'الاستهلاك هو الحد الحاكم'
-                        : 'Demand Is Your Limit'}
+                      : 'Roof is the limit'
+                    : isAr
+                      ? 'الميزانية هي الحد الحاكم'
+                      : 'Budget is the limit'}
                 </span>
-                <span className="text-slate-200">
+                <span className="text-[14px] text-[#b9bdcf]">
                   {assessment.chosen.bindingLimit === 'area'
                     ? isAr
-                      ? `لديك فائض في الميزانية ولكن مساحة السطح (${usableAreaM2} م²) امتلأت. اختيار لوح أعلى كفاءة (HJT) يمنحك قدرة أكبر في نفس المساحة.`
-                      : `Your ${usableAreaM2} m² roof fills up before your budget runs out. Choosing a higher-efficiency panel (HJT) fits more kWp in the same footprint.`
+                      ? `يتبقى لديك ${Math.max(0, budgetEgp - assessment.chosen.capexEgp).toLocaleString('en-US')} ج.م من الميزانية. اختيار تكنولوجيا أعلى كفاءة (HJT) يتيح قدرة أكبر على نفس السطح.`
+                      : `You have EGP ${Math.max(0, budgetEgp - assessment.chosen.capexEgp).toLocaleString('en-US')} of budget left. A higher-efficiency technology (HJT) packs more kWp on the same roof.`
                     : isAr
-                      ? `لديك مساحة سطح إضافية. اختيار لوح أقل تكلفة لكل واط (pc-Si) يعظم القدرة ضمن ميزانيتك.`
-                      : `You have spare roof area. Choosing a lower cost-per-Wp module (Polycrystalline) maximizes kWp within your budget.`}
+                      ? 'لديك مساحة سطح غير مستغلة. اختيار لوح أقل تكلفة لكل واط (Polycrystalline) يعظم القدرة ضمن ميزانيتك.'
+                      : 'You have unused roof space. A lower-cost per Wp panel (Polycrystalline) maximizes kWp within your budget.'}
                 </span>
               </div>
 
-              {/* Side-by-side 3-Technology Comparison Table + Monthly Bars */}
-              <div className="mt-4 grid gap-4 lg:grid-cols-12">
-                <div className="overflow-x-auto rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl lg:col-span-8">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="font-serif text-base font-semibold text-white">
-                      {isAr
-                        ? 'مقارنة التقنيات الثلاث جنباً إلى جنب على سطحك'
-                        : 'All Three Panel Technologies on This Exact Roof'}
-                    </h3>
-                    <span className="text-[11px] text-slate-400">
-                      {isAr ? 'انقر على أي صف للتبديل' : 'Click any row to switch'}
-                    </span>
-                  </div>
-                  <table className="w-full min-w-[520px] border-collapse text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-white/15 text-[11px] uppercase tracking-wider text-slate-400">
-                        <th className="py-2 pr-2">{isAr ? 'التكنولوجيا' : 'Technology'}</th>
-                        <th className="py-2 px-2 text-right">{isAr ? 'الألواح' : 'Panels'}</th>
-                        <th className="py-2 px-2 text-right">kWp</th>
-                        <th className="py-2 px-2 text-right">{isAr ? 'التكلفة (EGP)' : 'Cost (EGP)'}</th>
-                        <th className="py-2 px-2 text-right">{isAr ? 'إنتاج/سنة' : 'kWh / yr'}</th>
-                        <th className="py-2 px-2 text-right">{isAr ? 'الاسترداد' : 'Payback'}</th>
-                        <th className="py-2 pl-2 text-right">{isAr ? 'الحد' : 'Limit'}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assessment.allTechnologies.map((row) => {
-                        const isSelected = row.tech === tech;
-                        return (
-                          <tr
-                            key={row.tech}
-                            onClick={() => setTech(row.tech)}
-                            className={`cursor-pointer border-b border-white/10 transition ${
-                              isSelected
-                                ? 'bg-amber-500/20 font-semibold text-white'
-                                : 'text-slate-300 hover:bg-white/5'
-                            }`}
-                          >
-                            <td className="py-2.5 pr-2">
-                              <span>{isAr ? row.nameAr : row.nameEn}</span>
-                              {row.isRecommendedForRegion && (
-                                <span className="ml-1.5 rounded-full bg-teal-500/25 px-2 py-0.5 text-[10px] text-teal-300">
-                                  {isAr ? 'موصى به للإقليم' : 'Region Pick'}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-2 text-right">{row.panelCount}</td>
-                            <td className="py-2.5 px-2 text-right">{row.kWp.toFixed(2)}</td>
-                            <td className="py-2.5 px-2 text-right">
-                              {row.capexEgp.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-2 text-right">
-                              {row.annualKwh.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-2 text-right">
-                              {row.simplePaybackYears} yr
-                            </td>
-                            <td className="py-2.5 pl-2 text-right uppercase">
-                              {row.bindingLimit}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              <div data-gsap-item className="glass mt-3 overflow-x-auto">
+                <div className="mb-2 font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
+                  {isAr
+                    ? 'التقنيات الثلاث على سطحك (انقر للتبديل)'
+                    : 'All three technologies on your roof'}
                 </div>
-
-                <div className="rounded-2xl border border-white/15 bg-[#0a0d1c]/80 p-4 backdrop-blur-xl lg:col-span-4">
-                  <h3 className="font-serif text-base font-semibold text-white">
-                    {isAr ? 'الإنتاج الشهري (kWh)' : 'Monthly Energy Yield (kWh)'}
-                  </h3>
-                  <div className="mt-3 flex h-32 items-end gap-1.5">
-                    {assessment.chosen.monthlyKwh.map((val, mIdx) => {
-                      const maxM = Math.max(1, ...assessment.chosen.monthlyKwh);
-                      const pct = Math.max(12, Math.round((val / maxM) * 100));
+                <table className="w-full min-w-[480px] border-collapse text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.16] text-[#b9bdcf]">
+                      <th className="p-1.5">{isAr ? 'التكنولوجيا' : 'Technology'}</th>
+                      <th className="p-1.5">{isAr ? 'الألواح' : 'Panels'}</th>
+                      <th className="p-1.5">kWp</th>
+                      <th className="p-1.5">{isAr ? 'التكلفة (EGP)' : 'Cost (EGP)'}</th>
+                      <th className="p-1.5">{isAr ? 'إنتاج / سنة' : 'kWh / yr'}</th>
+                      <th className="p-1.5">{isAr ? 'الاسترداد' : 'Payback'}</th>
+                      <th className="p-1.5">{isAr ? 'الحد الحاكم' : 'Binding Limit'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assessment.allTechnologies.map((row) => {
+                      const sel = row.tech === tech;
                       return (
-                        <div
-                          key={mIdx}
-                          className="flex flex-1 flex-col items-center gap-1"
-                          title={`Month ${mIdx + 1}: ${val.toLocaleString()} kWh`}
+                        <tr
+                          key={row.tech}
+                          onClick={() => setTech(row.tech)}
+                          className={`cursor-pointer border-b border-white/[0.16] transition-colors ${
+                            sel
+                              ? 'bg-[#f5a524]/20 font-semibold text-white'
+                              : 'text-[#f4f5fa] hover:bg-white/[0.06]'
+                          }`}
                         >
-                          <div
-                            className="w-full rounded-t bg-gradient-to-t from-amber-600 to-amber-300"
-                            style={{ height: `${pct}%` }}
-                          />
-                        </div>
+                          <td className="py-2 px-1.5">
+                            {isAr ? row.nameAr : row.nameEn}
+                            {sel ? ' ★' : ''}
+                          </td>
+                          <td className="py-2 px-1.5">{row.panelCount}</td>
+                          <td className="py-2 px-1.5">{row.kWp.toFixed(2)}</td>
+                          <td className="py-2 px-1.5">{row.capexEgp.toLocaleString('en-US')}</td>
+                          <td className="py-2 px-1.5">{row.annualKwh.toLocaleString('en-US')}</td>
+                          <td className="py-2 px-1.5">{row.simplePaybackYears} y</td>
+                          <td className="py-2 px-1.5 capitalize">{row.bindingLimit}</td>
+                        </tr>
                       );
                     })}
-                  </div>
-                  <div className="mt-1.5 flex justify-between text-[10px] text-slate-400">
-                    {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map((m, i) => (
-                      <span key={i} className="flex-1 text-center">
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 text-xs text-[#b9bdcf]">
+                <span className="tag-pill mr-2">simulated estimate</span>
+                {isAr
+                  ? 'الأرقام تستجيب لاختيار اللوح والمساحة والميزانية والموقع وفق افتراضات أسعار وتعريفة موثقة.'
+                  : `Engineering estimates (${assessment.assumptions.version}) responding live to your panel, location, roof, and budget choices.`}
               </div>
             </div>
           </div>
         </section>
 
-        {/* CHAPTER 9A: DUSK SUNSET */}
+        {/* CHAPTER 9: DUSK SUNSET */}
         <section
           id="dusk"
           ref={(el) => {
             sectionRefs.current[9] = el;
           }}
-          className="relative min-h-[180vh]"
+          className="relative min-h-[260vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-20 pt-24">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="max-w-2xl">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                  {isAr ? 'الغسق · غروب الشمس' : '18:30 · Dusk'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[9] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div className="max-w-[640px]">
+                <div data-gsap-item className="eyebrow">
+                  {isAr ? 'الغسق' : 'Dusk'}
                 </div>
-                <h2 className="mt-2 font-serif text-3xl font-semibold text-white sm:text-5xl">
+                <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-3.5">
                   {isAr
-                    ? 'ثم تغرب الشمس، وتتوقف الألواح عن التوليد.'
+                    ? 'ثم تغرب الشمس، وتتوقف ألواحك عن التوليد.'
                     : 'Then the sun goes down, and your panels stop.'}
                 </h2>
-                <p className="mt-4 text-base text-slate-200 sm:text-lg">
+                <p data-gsap-item className="cinematic-lede mb-5">
                   {isAr
-                    ? 'تستهلك معظم المنازل والمنشآت ذروة طاقتها في المساء. ما تفعله بفائض الظهيرة يحدد كم ستستفيد فعلياً من نظامك الشمسي.'
-                    : 'Most Egyptian homes and clinics use their peak electricity in the evening. How you handle that gap decides how much of your own solar you actually keep.'}
+                    ? 'تستهلك معظم المنازل أكبر قدر من الكهرباء في المساء. ما تفعله حيال ذلك يقرر كم ستستفيد فعلياً من طاقتك الشمسية.'
+                    : 'Most homes use the most electricity in the evening. What you do about that decides how much of your own solar you actually use.'}
                 </p>
+                <div
+                  data-gsap-item
+                  className="font-mono text-xs uppercase tracking-[0.16em] text-white/85"
+                >
+                  {isAr ? 'واصل التمرير ↓' : 'Keep scrolling ↓'}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* CHAPTER 9B & 10: NIGHT ENHANCERS & CALL TO ACTION */}
+        {/* CHAPTER 10: NIGHT ENHANCERS & CALL TO ACTION */}
         <section
           id="night"
           ref={(el) => {
             sectionRefs.current[10] = el;
           }}
-          className="relative min-h-[185vh]"
+          className="relative min-h-[260vh]"
         >
-          <div className="sticky top-0 flex min-h-screen items-center px-6 py-20">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                {isAr ? 'الليل · المعززات الذكية والخطوة التالية' : '21:00 Night · Smart Enhancers & Your Report'}
+          <div className="sticky top-0 flex min-h-screen items-end px-6 pb-[9vh] pt-24">
+            <div
+              ref={(el) => {
+                contentRefs.current[10] = el;
+              }}
+              className="mx-auto w-full max-w-[1040px] will-change-[opacity,transform]"
+            >
+              <div data-gsap-item className="eyebrow">
+                {isAr ? 'الليل · اجعلها تعمل بعد الغروب' : 'Night · make it work after dark'}
               </div>
-              <h2 className="mt-1 font-serif text-3xl font-semibold text-white sm:text-5xl">
-                {isAr ? 'احتفظ بالشمس لما بعد الغروب' : 'Keep the sun for after dark'}
+              <h2 data-gsap-item className="cinematic-h2 mt-2.5 mb-4">
+                {isAr ? 'احتفظ بالشمس لوقت لاحق' : 'Keep the sun for later'}
               </h2>
 
-              <div className="mt-6 grid gap-3.5 md:grid-cols-2 lg:grid-cols-3">
-                {assessment.enhancers.map((enh) => (
-                  <div
-                    key={enh.id}
-                    className={`rounded-2xl border p-4 backdrop-blur-xl ${
-                      enh.recommended
-                        ? 'border-amber-400/40 bg-[#0a0d1c]/85'
-                        : 'border-white/15 bg-[#0a0d1c]/65'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
-                        {isAr ? enh.badgeAr : enh.badgeEn}
+              <div data-gsap-item className="glass">
+                <ul className="m-0 grid list-none gap-3 p-0">
+                  {assessment.enhancers.slice(0, 4).map((enh) => (
+                    <li
+                      key={enh.id}
+                      className="flex flex-col gap-1 border-b border-white/[0.1] pb-2.5 last:border-none last:pb-0 sm:flex-row sm:items-baseline sm:gap-4"
+                    >
+                      <b className="min-w-[190px] font-serif text-[19px] font-semibold text-white">
+                        {isAr ? enh.titleAr : enh.titleEn}
+                      </b>
+                      <span className="flex-1 text-[14px] text-[#b9bdcf]">
+                        {isAr ? enh.reasonAr : enh.reasonEn}
                       </span>
-                      <span className="text-xs font-semibold text-teal-300">
-                        {enh.impactMetric}
-                      </span>
-                    </div>
-                    <h3 className="mt-2 font-serif text-lg font-semibold text-white">
-                      {isAr ? enh.titleAr : enh.titleEn}
-                    </h3>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-300">
-                      {isAr ? enh.reasonAr : enh.reasonEn}
-                    </p>
-                  </div>
-                ))}
+                      <span className="tag-pill live shrink-0">{enh.impactMetric}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              {/* Chapter 10 CTA Bar */}
-              <div className="mt-8 rounded-2xl border border-amber-400/40 bg-gradient-to-r from-[#0a0d1c]/95 via-amber-950/35 to-[#0a0d1c]/95 p-6 backdrop-blur-xl">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-300">
-                      <Sparkles className="h-4 w-4" />
-                      <span>{isAr ? 'الفجر التالي · جاهز للتنفيذ' : 'Next Dawn · Ready to Act'}</span>
-                    </div>
-                    <h3 className="mt-1 font-serif text-2xl font-semibold text-white">
-                      {isAr
-                        ? 'احفظ تقريرك المالي، أو استكشف التوأم الرقمي ولوحة التشغيل'
-                        : 'Open your shareable report, launch the 3D Digital Twin, or enter Operate'}
-                    </h3>
-                  </div>
+              <div data-gsap-item className="mt-5 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => scrollToChapter('dawn')}
+                  className="btn-pill-primary"
+                >
+                  <span>{isAr ? 'ابدأ من جديد عند الفجر ↑' : 'Start again at dawn'}</span>
+                </button>
 
-                  <div className="flex flex-wrap gap-3">
-                    <Link
-                      href={reportHref}
-                      className="flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-xs font-semibold text-slate-950 shadow-lg shadow-amber-500/25 hover:bg-amber-400"
-                    >
-                      <FileSpreadsheet className="h-4 w-4" />
-                      <span>{isAr ? 'فتح التقرير الكامل / PDF' : 'Open Full Report & Print'}</span>
-                    </Link>
+                <Link href={reportHref} className="btn-pill">
+                  <FileSpreadsheet className="h-4 w-4 text-[#ffd166]" />
+                  <span>{isAr ? 'فتح التقرير الهندسي الكامل' : 'Open Full Report & Print'}</span>
+                </Link>
 
-                    <Link
-                      href={`/twin?tech=${tech}&lat=${site.cellLat}&lon=${site.cellLon}&count=${assessment.chosen.panelCount}`}
-                      className="flex items-center gap-2 rounded-full border border-teal-400/40 bg-teal-500/20 px-5 py-2.5 text-xs font-semibold text-teal-200 hover:bg-teal-500/30"
-                    >
-                      <Box className="h-4 w-4" />
-                      <span>{isAr ? 'التوأم الرقمي ثلاثي الأبعاد' : 'Launch 3D Digital Twin'}</span>
-                    </Link>
+                <Link
+                  href={`/twin?tech=${tech}&lat=${site.cellLat}&lon=${site.cellLon}&count=${assessment.chosen.panelCount}`}
+                  className="btn-pill"
+                >
+                  <Box className="h-4 w-4 text-[#3fc1c1]" />
+                  <span>{isAr ? 'التوأم الرقمي 3D' : 'Launch 3D Digital Twin'}</span>
+                </Link>
 
-                    <Link
-                      href="/app"
-                      className="flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 py-2.5 text-xs font-medium text-white hover:border-amber-400"
-                    >
-                      <Activity className="h-4 w-4 text-amber-400" />
-                      <span>{isAr ? 'ترقية إلى موقع تشغيل (Operate)' : 'Promote to Operate Site'}</span>
-                    </Link>
+                <Link href="/app" className="btn-pill">
+                  <Activity className="h-4 w-4 text-[#ffd166]" />
+                  <span>{isAr ? 'الانتقال إلى التشغيل (Operate)' : 'Enter Operate Dashboard'}</span>
+                </Link>
 
-                    <button
-                      type="button"
-                      onClick={handleCopyShareLink}
-                      className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-4 py-2.5 text-xs text-slate-200 hover:border-white/40"
-                    >
-                      {copiedUrl ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-emerald-400" />
-                          <span>{isAr ? 'تم نسخ الرابط!' : 'Link Copied!'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Share2 className="h-3.5 w-3.5" />
-                          <span>{isAr ? 'مشاركة الرابط' : 'Share Configuration URL'}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-3 text-[11px] text-slate-400">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                  <span>
-                    {isAr
-                      ? 'قاعدة الشفافية: جميع الأرقام ناتجة عن محاكاة فيزيائية وافتراضات أسعار مرجعية موثقة وليست عرض سعر إلزامي.'
-                      : 'Honesty rule: All figures carry their simulation/assumption provenance (version ' +
-                        assessment.assumptions.version +
-                        ') and are engineering estimates, not binding financial quotes.'}
-                  </span>
-                </div>
+                <button type="button" onClick={handleCopyShareLink} className="btn-pill">
+                  {copiedUrl ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-[#3fc1c1]" />
+                      <span>{isAr ? 'تم نسخ الرابط!' : 'Link Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="h-3.5 w-3.5" />
+                      <span>{isAr ? 'مشاركة الإعدادات' : 'Share URL'}</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
@@ -1544,7 +1568,7 @@ export default function PlanDayArcPage() {
           setSite(newSite);
           setLocationChosen(true);
           setLocationSource(srcLabel);
-          scrollToChapter('noon');
+          scrollToChapter('noon', 0.35);
         }}
       />
     </div>

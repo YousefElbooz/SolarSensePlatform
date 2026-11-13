@@ -15,7 +15,6 @@ import {
   ArrowLeft,
   ShieldCheck,
   TrendingUp,
-  Sun,
 } from 'lucide-react';
 
 function BusinessReportContent() {
@@ -27,7 +26,7 @@ function BusinessReportContent() {
   const tech = normalizePanelTech(searchParams.get('tech'));
   const lat = Number(searchParams.get('lat') ?? 30.04);
   const lon = Number(searchParams.get('lon') ?? 31.24);
-  const area = Number(searchParams.get('area') ?? 45);
+  const area = Number(searchParams.get('area') ?? 40);
   const budget = Number(searchParams.get('budget') ?? 180000);
   const bill = Number(searchParams.get('bill') ?? 2400);
 
@@ -37,7 +36,7 @@ function BusinessReportContent() {
         tech,
         lat: Number.isNaN(lat) ? 30.04 : lat,
         lon: Number.isNaN(lon) ? 31.24 : lon,
-        usableAreaM2: Number.isNaN(area) ? 45 : area,
+        usableAreaM2: Number.isNaN(area) ? 40 : area,
         budgetEgp: Number.isNaN(budget) ? 180000 : budget,
         monthlyBillEgp: Number.isNaN(bill) ? 2400 : bill,
       }),
@@ -55,34 +54,42 @@ function BusinessReportContent() {
   const { chosen, site, regionInfo } = assessment;
 
   return (
-    <div className="min-h-screen bg-[#05070f] pb-20 pt-20 text-slate-100">
-      <Navbar />
+    <div className="cinematic-page pb-20 pt-8">
+      <Navbar clockLabel="17:00 · Financial Report" />
 
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
         {/* Top Action Bar */}
-        <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="no-print glass mb-6 flex flex-wrap items-center justify-between gap-3 py-3 px-4">
           <Link
             href={`/?tech=${chosen.tech}&lat=${site.cellLat}&lon=${site.cellLon}&area=${assessment.input.usableAreaM2}&budget=${assessment.input.budgetEgp}&bill=${assessment.input.monthlyBillEgp}`}
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-amber-300"
+            className="flex items-center gap-1.5 text-xs font-medium text-[#b9bdcf] hover:text-[#ffd166]"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>{isAr ? 'العودة إلى مسار التخطيط' : 'Back to Plan configurator'}</span>
+            <span>{isAr ? 'العودة إلى مسار الشمس' : 'Back to Day Arc planner'}</span>
           </Link>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs text-slate-200 hover:border-amber-400"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5" />}
-              <span>{copied ? (isAr ? 'تم النسخ!' : 'Copied URL!') : isAr ? 'مشاركة التقرير' : 'Share Report URL'}</span>
+            <button type="button" onClick={handleCopy} className="btn-pill py-1.5 px-3.5 text-xs">
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-[#3fc1c1]" />
+              ) : (
+                <Share2 className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {copied
+                  ? isAr
+                    ? 'تم النسخ!'
+                    : 'Copied URL!'
+                  : isAr
+                    ? 'مشاركة التقرير'
+                    : 'Share Report URL'}
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs text-slate-200 hover:border-amber-400"
+              className="btn-pill py-1.5 px-3.5 text-xs"
             >
               <Printer className="h-3.5 w-3.5" />
               <span>{isAr ? 'طباعة / حفظ PDF' : 'Print / Save PDF'}</span>
@@ -90,15 +97,15 @@ function BusinessReportContent() {
 
             <Link
               href={`/twin?tech=${chosen.tech}&lat=${site.cellLat}&lon=${site.cellLon}&count=${chosen.panelCount}`}
-              className="flex items-center gap-1.5 rounded-full border border-teal-400/40 bg-teal-500/20 px-4 py-1.5 text-xs font-semibold text-teal-200 hover:bg-teal-500/30"
+              className="btn-pill py-1.5 px-3.5 text-xs"
             >
-              <Box className="h-3.5 w-3.5" />
+              <Box className="h-3.5 w-3.5 text-[#3fc1c1]" />
               <span>{isAr ? 'معاينة التوأم الرقمي 3D' : 'View in 3D Digital Twin'}</span>
             </Link>
 
             <Link
               href={`/app/sites/benban-1mw?promoted=1&tech=${chosen.tech}&kwp=${chosen.kWp}&lat=${site.cellLat}&lon=${site.cellLon}`}
-              className="flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-400"
+              className="btn-pill-primary py-1.5 px-4 text-xs"
             >
               <Activity className="h-3.5 w-3.5" />
               <span>{isAr ? 'ترقية إلى موقع تشغيل (Operate)' : 'Promote to Operate Site →'}</span>
@@ -107,167 +114,176 @@ function BusinessReportContent() {
         </div>
 
         {/* Report Header Card */}
-        <div className="rounded-3xl border border-white/15 bg-gradient-to-br from-[#0c1126] to-[#070a17] p-6 sm:p-8 shadow-2xl">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-6">
+        <div className="glass p-6 sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.14] pb-6">
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-400">
-                <Sun className="h-4 w-4" />
-                <span>SolarSense Egypt · Engineering & Financial Assessment</span>
+              <div className="eyebrow">
+                SolarSense Egypt · Engineering &amp; Financial Assessment
               </div>
-              <h1 className="mt-2 font-serif text-3xl font-semibold text-white sm:text-4xl">
+              <h1 className="cinematic-h2 mt-2">
                 {site.anchorName ? `${site.anchorName} · ` : ''}
                 {isAr ? regionInfo.nameAr : regionInfo.nameEn} ({regionInfo.code})
               </h1>
-              <p className="mt-1 text-sm text-slate-300">
+              <p className="mt-1.5 text-sm text-[#b9bdcf]">
                 ERA5 Cell <b>{site.cellLat.toFixed(2)}° N, {site.cellLon.toFixed(2)}° E</b> ·{' '}
                 {assessment.input.usableAreaM2} m² Roof · Budget EGP{' '}
-                {assessment.input.budgetEgp.toLocaleString()} · Monthly Bill EGP{' '}
-                {assessment.input.monthlyBillEgp.toLocaleString()}
+                {assessment.input.budgetEgp.toLocaleString('en-US')}
               </p>
             </div>
 
-            <div className="text-right text-xs text-slate-400">
+            <div className="text-right font-mono text-xs text-[#b9bdcf]">
               <div>
-                Report ID: <span className="font-mono text-slate-200">{reportId}</span>
+                Report ID: <span className="text-white">{reportId}</span>
               </div>
               <div>Date: {assessment.assumptions.date}</div>
-              <div className="mt-1 inline-block rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">
-                Simulated Estimate · {assessment.predictionSource}
+              <div className="mt-1.5">
+                <span className="tag-pill">Simulated Estimate · {assessment.predictionSource}</span>
               </div>
             </div>
           </div>
 
           {/* 5 Primary KPIs */}
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">System Size</div>
-              <div className="mt-1 font-serif text-2xl font-semibold text-white">
-                {chosen.kWp} kWp
+          <div className="mt-6 grid grid-cols-2 gap-3.5 sm:grid-cols-5">
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-4">
+              <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                System Size
               </div>
-              <div className="text-xs text-slate-400">
+              <div className="mt-1 font-serif text-2xl font-semibold text-white">
+                {chosen.kWp.toFixed(2)} kWp
+              </div>
+              <div className="text-xs text-[#b9bdcf]">
                 {chosen.panelCount} × {chosen.tech} ({chosen.roofAreaUsedM2} m²)
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">Turnkey Cost</div>
-              <div className="mt-1 font-serif text-2xl font-semibold text-amber-300">
-                EGP {chosen.capexEgp.toLocaleString()}
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-4">
+              <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                Turnkey Cost
               </div>
-              <div className="text-xs text-slate-400">
+              <div className="mt-1 font-serif text-2xl font-semibold text-[#ffd166]">
+                EGP {chosen.capexEgp.toLocaleString('en-US')}
+              </div>
+              <div className="text-xs text-[#b9bdcf]">
                 Limited by <b className="uppercase text-white">{chosen.bindingLimit}</b>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">Annual Yield</div>
-              <div className="mt-1 font-serif text-2xl font-semibold text-white">
-                {chosen.annualKwh.toLocaleString()} kWh
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-4">
+              <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                Annual Yield
               </div>
-              <div className="text-xs text-teal-300">
+              <div className="mt-1 font-serif text-2xl font-semibold text-white">
+                {chosen.annualKwh.toLocaleString('en-US')} kWh
+              </div>
+              <div className="text-xs text-[#9fe9e9]">
                 {chosen.specificYield} kWh/kWp · {chosen.billCoveragePct}% bill covered
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">Year-1 Saving</div>
-              <div className="mt-1 font-serif text-2xl font-semibold text-emerald-300">
-                EGP {chosen.annualSavingEgp.toLocaleString()}
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-4">
+              <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                Year-1 Saving
               </div>
-              <div className="text-xs text-slate-400">
-                {chosen.co2AvoidedKgYear.toLocaleString()} kg CO₂ avoided/yr
+              <div className="mt-1 font-serif text-2xl font-semibold text-[#9fe9e9]">
+                EGP {chosen.annualSavingEgp.toLocaleString('en-US')}
+              </div>
+              <div className="text-xs text-[#b9bdcf]">
+                {chosen.co2AvoidedKgYear.toLocaleString('en-US')} kg CO₂ avoided/yr
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">Payback & NPV</div>
-              <div className="mt-1 font-serif text-2xl font-semibold text-amber-300">
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-4">
+              <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#b9bdcf]">
+                Payback &amp; NPV
+              </div>
+              <div className="mt-1 font-serif text-2xl font-semibold text-[#ffd166]">
                 {chosen.simplePaybackYears} yrs
               </div>
-              <div className="text-xs text-emerald-300">
-                25-yr NPV: EGP {chosen.npv25YrEgp.toLocaleString()}
+              <div className="text-xs text-[#9fe9e9]">
+                25-yr NPV: EGP {chosen.npv25YrEgp.toLocaleString('en-US')}
               </div>
             </div>
           </div>
 
-          {/* Itemized CAPEX & Sensitivity Grid */}
+          {/* Itemized CAPEX & Side-by-Side Comparison */}
           <div className="mt-6 grid gap-6 lg:grid-cols-12">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:col-span-5">
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-5 lg:col-span-5">
               <h2 className="font-serif text-lg font-semibold text-white">
                 {isAr ? 'تفصيل التكلفة الرأسمالية (CAPEX)' : 'Itemised System Cost Breakdown'}
               </h2>
               <dl className="mt-4 space-y-2.5 text-sm">
-                <div className="flex justify-between border-b border-white/10 pb-2">
-                  <dt className="text-slate-300">
+                <div className="flex justify-between border-b border-white/[0.1] pb-2">
+                  <dt className="text-[#b9bdcf]">
                     Solar Modules ({chosen.panelCount} × {chosen.tech})
                   </dt>
-                  <dd className="font-semibold text-white">
-                    EGP {chosen.itemizedCost.panelsEgp.toLocaleString()}
+                  <dd className="font-mono font-semibold text-white">
+                    EGP {chosen.itemizedCost.panelsEgp.toLocaleString('en-US')}
                   </dd>
                 </div>
-                <div className="flex justify-between border-b border-white/10 pb-2">
-                  <dt className="text-slate-300">Grid-Tied / Hybrid Inverter ({chosen.kWp} kWp)</dt>
-                  <dd className="font-semibold text-white">
-                    EGP {chosen.itemizedCost.inverterEgp.toLocaleString()}
+                <div className="flex justify-between border-b border-white/[0.1] pb-2">
+                  <dt className="text-[#b9bdcf]">Grid-Tied / Hybrid Inverter ({chosen.kWp} kWp)</dt>
+                  <dd className="font-mono font-semibold text-white">
+                    EGP {chosen.itemizedCost.inverterEgp.toLocaleString('en-US')}
                   </dd>
                 </div>
-                <div className="flex justify-between border-b border-white/10 pb-2">
-                  <dt className="text-slate-300">
+                <div className="flex justify-between border-b border-white/[0.1] pb-2">
+                  <dt className="text-[#b9bdcf]">
                     Anodized Aluminum Tilt Structure ({Math.round(site.cellLat * 0.9)}° South)
                   </dt>
-                  <dd className="font-semibold text-white">
-                    EGP {chosen.itemizedCost.mountingEgp.toLocaleString()}
+                  <dd className="font-mono font-semibold text-white">
+                    EGP {chosen.itemizedCost.mountingEgp.toLocaleString('en-US')}
                   </dd>
                 </div>
-                <div className="flex justify-between border-b border-white/10 pb-2">
-                  <dt className="text-slate-300">Cabling, DC/AC Protection & Commissioning</dt>
-                  <dd className="font-semibold text-white">
-                    EGP {chosen.itemizedCost.installationEgp.toLocaleString()}
+                <div className="flex justify-between border-b border-white/[0.1] pb-2">
+                  <dt className="text-[#b9bdcf]">Cabling, DC/AC Protection &amp; Commissioning</dt>
+                  <dd className="font-mono font-semibold text-white">
+                    EGP {chosen.itemizedCost.installationEgp.toLocaleString('en-US')}
                   </dd>
                 </div>
-                <div className="flex justify-between pt-1 text-base font-bold text-amber-300">
+                <div className="flex justify-between pt-1 text-base font-bold text-[#ffd166]">
                   <dt>Total Installed Turnkey Cost</dt>
-                  <dd>EGP {chosen.capexEgp.toLocaleString()}</dd>
+                  <dd className="font-mono">EGP {chosen.capexEgp.toLocaleString('en-US')}</dd>
                 </div>
               </dl>
 
-              <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-3.5 text-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-teal-300">
+              <div className="mt-5 rounded-xl border border-white/[0.12] bg-white/[0.04] p-3.5 text-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-[#9fe9e9]">
                   <TrendingUp className="h-4 w-4" />
                   <span>Sensitivity Analysis (What-If)</span>
                 </div>
-                <div className="mt-2 space-y-1 text-slate-300">
+                <div className="mt-2 space-y-1 text-[#b9bdcf]">
                   <div>
-                    • <b>If +20% Budget:</b> {assessment.sensitivity.plus20PctBudget.panelCount}{' '}
-                    panels ({assessment.sensitivity.plus20PctBudget.kWp} kWp) →{' '}
-                    {assessment.sensitivity.plus20PctBudget.annualKwh.toLocaleString()} kWh/yr (
-                    {assessment.sensitivity.plus20PctBudget.paybackYears} yr payback)
+                    • <b className="text-white">If +20% Budget:</b>{' '}
+                    {assessment.sensitivity.plus20PctBudget.panelCount} panels (
+                    {assessment.sensitivity.plus20PctBudget.kWp} kWp) →{' '}
+                    {assessment.sensitivity.plus20PctBudget.annualKwh.toLocaleString('en-US')}{' '}
+                    kWh/yr ({assessment.sensitivity.plus20PctBudget.paybackYears} yr payback)
                   </div>
                   <div>
-                    • <b>If +10 m² Roof Area:</b> {assessment.sensitivity.plus10M2Area.panelCount}{' '}
-                    panels ({assessment.sensitivity.plus10M2Area.kWp} kWp) →{' '}
-                    {assessment.sensitivity.plus10M2Area.annualKwh.toLocaleString()} kWh/yr (
+                    • <b className="text-white">If +10 m² Roof Area:</b>{' '}
+                    {assessment.sensitivity.plus10M2Area.panelCount} panels (
+                    {assessment.sensitivity.plus10M2Area.kWp} kWp) →{' '}
+                    {assessment.sensitivity.plus10M2Area.annualKwh.toLocaleString('en-US')} kWh/yr (
                     {assessment.sensitivity.plus10M2Area.paybackYears} yr payback)
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Side-by-Side 3-Technology Comparison */}
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:col-span-7">
+            <div className="rounded-2xl border border-white/[0.14] bg-white/[0.03] p-5 lg:col-span-7">
               <h2 className="font-serif text-lg font-semibold text-white">
                 {isAr
                   ? 'مقارنة التقنيات الثلاث على نفس الموقع'
                   : 'Side-by-Side Comparison of All Three Technologies'}
               </h2>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-[#b9bdcf]">
                 {isAr ? regionInfo.recommendedReasonAr : regionInfo.recommendedReasonEn}
               </p>
 
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left text-xs">
                   <thead>
-                    <tr className="border-b border-white/15 text-[11px] uppercase tracking-wider text-slate-400">
+                    <tr className="border-b border-white/[0.16] font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
                       <th className="py-2 pr-2">Technology</th>
                       <th className="py-2 px-2 text-right">Panels</th>
                       <th className="py-2 px-2 text-right">kWp</th>
@@ -284,26 +300,34 @@ function BusinessReportContent() {
                       return (
                         <tr
                           key={r.tech}
-                          className={`border-b border-white/10 ${
-                            active ? 'bg-amber-500/20 font-semibold text-white' : 'text-slate-300'
+                          className={`border-b border-white/[0.1] ${
+                            active
+                              ? 'bg-[#f5a524]/20 font-semibold text-white'
+                              : 'text-[#b9bdcf]'
                           }`}
                         >
                           <td className="py-3 pr-2">
                             {r.nameEn}
                             {r.isRecommendedForRegion && (
-                              <span className="ml-1.5 rounded-full bg-teal-500/25 px-2 py-0.5 text-[10px] text-teal-300">
-                                Best Fit
-                              </span>
+                              <span className="ml-1.5 tag-pill live">Best Fit</span>
                             )}
                           </td>
-                          <td className="py-3 px-2 text-right">{r.panelCount}</td>
-                          <td className="py-3 px-2 text-right">{r.kWp.toFixed(2)}</td>
-                          <td className="py-3 px-2 text-right">{r.capexEgp.toLocaleString()}</td>
-                          <td className="py-3 px-2 text-right">{r.annualKwh.toLocaleString()}</td>
-                          <td className="py-3 px-2 text-right">{r.specificYield} kWh/kWp</td>
-                          <td className="py-3 px-2 text-right">{r.simplePaybackYears} yr</td>
-                          <td className="py-3 pl-2 text-right text-emerald-300">
-                            EGP {r.npv25YrEgp.toLocaleString()}
+                          <td className="py-3 px-2 text-right font-mono">{r.panelCount}</td>
+                          <td className="py-3 px-2 text-right font-mono">{r.kWp.toFixed(2)}</td>
+                          <td className="py-3 px-2 text-right font-mono">
+                            {r.capexEgp.toLocaleString('en-US')}
+                          </td>
+                          <td className="py-3 px-2 text-right font-mono">
+                            {r.annualKwh.toLocaleString('en-US')}
+                          </td>
+                          <td className="py-3 px-2 text-right font-mono">
+                            {r.specificYield} kWh/kWp
+                          </td>
+                          <td className="py-3 px-2 text-right font-mono">
+                            {r.simplePaybackYears} yr
+                          </td>
+                          <td className="py-3 pl-2 text-right font-mono text-[#9fe9e9]">
+                            EGP {r.npv25YrEgp.toLocaleString('en-US')}
                           </td>
                         </tr>
                       );
@@ -314,16 +338,16 @@ function BusinessReportContent() {
 
               {/* 25-year Cumulative Net Cashflow Trajectory */}
               <div className="mt-6">
-                <div className="flex items-center justify-between text-xs text-slate-300">
-                  <span className="font-semibold">
-                    25-Year Cumulative Net Cashflow (incl. module degradation & tariff growth)
+                <div className="flex items-center justify-between text-xs text-[#b9bdcf]">
+                  <span className="font-semibold text-white">
+                    25-Year Cumulative Net Cashflow (incl. module degradation &amp; tariff growth)
                   </span>
-                  <span className="text-emerald-300">
+                  <span className="font-mono text-[#9fe9e9]">
                     Year 25 Net: +EGP{' '}
-                    {assessment.cashflow25Years[24]?.cumulativeNetEgp.toLocaleString()}
+                    {assessment.cashflow25Years[24]?.cumulativeNetEgp.toLocaleString('en-US')}
                   </span>
                 </div>
-                <div className="mt-3 flex h-28 items-end gap-1 border-b border-white/15 pb-1">
+                <div className="mt-3 flex h-28 items-end gap-1 border-b border-white/[0.14] pb-1">
                   {assessment.cashflow25Years.map((pt) => {
                     const maxNet = Math.max(
                       1,
@@ -338,11 +362,11 @@ function BusinessReportContent() {
                       <div
                         key={pt.year}
                         className="flex-1"
-                        title={`Year ${pt.year}: EGP ${pt.cumulativeNetEgp.toLocaleString()}`}
+                        title={`Year ${pt.year}: EGP ${pt.cumulativeNetEgp.toLocaleString('en-US')}`}
                       >
                         <div
                           className={`w-full rounded-t ${
-                            positive ? 'bg-emerald-400/80' : 'bg-rose-400/60'
+                            positive ? 'bg-[#3fc1c1]/85' : 'bg-[#f5a524]/55'
                           }`}
                           style={{ height: `${hPct}%` }}
                         />
@@ -350,7 +374,7 @@ function BusinessReportContent() {
                     );
                   })}
                 </div>
-                <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                <div className="mt-1 flex justify-between font-mono text-[10px] text-[#b9bdcf]">
                   <span>Yr 1 (−CAPEX)</span>
                   <span>Payback (~Yr {chosen.simplePaybackYears})</span>
                   <span>Yr 15</span>
@@ -360,46 +384,21 @@ function BusinessReportContent() {
             </div>
           </div>
 
-          {/* Recommended System Enhancers */}
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <h2 className="font-serif text-lg font-semibold text-white">
-              {isAr ? 'التحسينات والمعززات الموصى بها لنظامك' : 'Tailored System Enhancers'}
-            </h2>
-            <div className="mt-4 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-              {assessment.enhancers.map((enh) => (
-                <div
-                  key={enh.id}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                      {enh.badgeEn}
-                    </span>
-                    <span className="font-semibold text-teal-300">{enh.impactMetric}</span>
-                  </div>
-                  <div className="mt-2 font-serif text-base font-semibold text-white">
-                    {enh.titleEn}
-                  </div>
-                  <p className="mt-1 text-slate-300">{enh.reasonEn}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Honesty & Assumptions Disclosure Footer (Platform Context §10) */}
-          <div className="mt-6 rounded-2xl border border-amber-400/25 bg-amber-500/5 p-4 text-xs text-slate-300">
-            <div className="flex items-center gap-2 font-semibold text-amber-300">
+          {/* Honesty & Assumptions Disclosure Footer */}
+          <div className="mt-6 rounded-2xl border border-[#ffd166]/25 bg-[#f5a524]/[0.06] p-4 text-xs text-[#b9bdcf]">
+            <div className="flex items-center gap-2 font-semibold text-[#ffd166]">
               <ShieldCheck className="h-4 w-4" />
-              <span>Honesty & Assumptions Disclosure ({assessment.assumptions.version})</span>
+              <span>Honesty &amp; Assumptions Disclosure ({assessment.assumptions.version})</span>
             </div>
             <p className="mt-1.5 leading-relaxed">
-              1. <b>Simulated Estimate:</b> Yield figures are computed from the SolarSense regional
-              climatological atlas (ERA5 2020–2026 reanalysis → pvlib physics chain) and
-              technology-specific thermal coefficients (γ).
+              1. <b className="text-white">Simulated Estimate:</b> Yield figures are computed from
+              the SolarSense regional climatological atlas (ERA5 2020–2026 reanalysis → pvlib
+              physics chain) and technology-specific thermal coefficients (γ).
               <br />
-              2. <b>Financial Assumptions ({assessment.assumptions.date}):</b> Effective tariff EGP{' '}
-              {assessment.assumptions.effectiveTariffEgpPerKwh}/kWh ({assessment.assumptions.tariffSource}
-              ), packing factor {assessment.assumptions.packingFactor}, system losses{' '}
+              2. <b className="text-white">Financial Assumptions ({assessment.assumptions.date}):</b>{' '}
+              Effective tariff EGP {assessment.assumptions.effectiveTariffEgpPerKwh}/kWh (
+              {assessment.assumptions.tariffSource}), packing factor{' '}
+              {assessment.assumptions.packingFactor}, system losses{' '}
               {assessment.assumptions.systemLossesPct}%, discount rate{' '}
               {assessment.assumptions.discountRatePct}%, grid emission factor{' '}
               {assessment.assumptions.gridEmissionFactorKgCo2PerKwh} kg CO₂/kWh. This report is an
@@ -414,7 +413,11 @@ function BusinessReportContent() {
 
 export default function BusinessReportPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#05070f] p-12 text-slate-300">Loading Engineering Report...</div>}>
+    <Suspense
+      fallback={
+        <div className="cinematic-page p-12 text-[#b9bdcf]">Loading Engineering Report...</div>
+      }
+    >
       <BusinessReportContent />
     </Suspense>
   );
