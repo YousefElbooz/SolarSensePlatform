@@ -9,7 +9,14 @@ import { Navbar, useLanguage } from '@/components/Navbar';
 import { PanelThreeViewer, RooftopThreeViewer } from '@/components/SolarThreeViewers';
 import { GlobeLocationModal } from '@/components/GlobeLocationModal';
 import { runAssessment } from '@/domain/business';
-import { PANEL_TECH_LIST, normalizePanelTech, techToShortKey } from '@/domain/panels';
+import {
+  PANEL_TECHNOLOGIES,
+  PANEL_TECH_LIST,
+  getDefaultPanelPriceEgp,
+  getMaxPanelsForArea,
+  normalizePanelTech,
+  techToShortKey,
+} from '@/domain/panels';
 import { predictionProvider } from '@/domain/providers/predictionProvider';
 import { REGIONS, snapToGridCell } from '@/domain/regions';
 import { LiveWeatherObservation, PanelTech, SitePoint } from '@/domain/types';
@@ -172,15 +179,30 @@ function formatHhMm(decimalHour: number): string {
 export default function PlanDayArcPage() {
   const { isAr } = useLanguage();
 
-  // Plan flow state synced with URL query parameters (defaults match day_arc_prototype.html?tech=pc&area=40&budget=180000)
+  // Plan flow state synced with URL query parameters
   const [tech, setTech] = useState<PanelTech>('pc-Si');
   const [site, setSite] = useState<SitePoint>(() => snapToGridCell(30.04, 31.24));
   const [locationChosen, setLocationChosen] = useState<boolean>(false);
   const [locationSource, setLocationSource] = useState<string>('Cairo (default)');
   const [usableAreaM2, setUsableAreaM2] = useState<number>(40);
+  const [panelCount, setPanelCount] = useState<number>(() => getMaxPanelsForArea(40, 'pc-Si'));
+  const [customPanelPricesEgp, setCustomPanelPricesEgp] = useState<Record<PanelTech, number>>(() => ({
+    'pc-Si': getDefaultPanelPriceEgp('pc-Si'),
+    'a-Si:H/sc-Si': getDefaultPanelPriceEgp('a-Si:H/sc-Si'),
+    CIGS: getDefaultPanelPriceEgp('CIGS'),
+  }));
   const [budgetEgp, setBudgetEgp] = useState<number>(180000);
   const [monthlyBillEgp, setMonthlyBillEgp] = useState<number>(2400);
   const [daytimeSharePct, setDaytimeSharePct] = useState<number>(45);
+
+  const maxRoofPanels = useMemo(() => getMaxPanelsForArea(usableAreaM2, tech), [usableAreaM2, tech]);
+  const activePanelPriceEgp = customPanelPricesEgp[tech] ?? getDefaultPanelPriceEgp(tech);
+  const defaultPanelPriceEgp = getDefaultPanelPriceEgp(tech);
+
+  // Keep panelCount within roof limit when tech changes
+  useEffect(() => {
+    setPanelCount((prev) => Math.max(1, Math.min(maxRoofPanels, prev)));
+  }, [maxRoofPanels]);
 
   const [globeOpen, setGlobeOpen] = useState<boolean>(false);
   const [globeAutoLocate, setGlobeAutoLocate] = useState<boolean>(false);
@@ -203,7 +225,8 @@ export default function PlanDayArcPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tech');
-    if (t) setTech(normalizePanelTech(t));
+    const resolvedTech = t ? normalizePanelTech(t) : 'pc-Si';
+    if (t) setTech(resolvedTech);
     const lat = Number(params.get('lat'));
     const lon = Number(params.get('lon'));
     if (!Number.isNaN(lat) && !Number.isNaN(lon) && lat > 20 && lon > 20) {
@@ -211,7 +234,24 @@ export default function PlanDayArcPage() {
       setLocationChosen(true);
     }
     const area = Number(params.get('area'));
+    const resolvedArea = !Number.isNaN(area) && area >= 10 && area <= 500 ? area : 40;
     if (!Number.isNaN(area) && area >= 10 && area <= 500) setUsableAreaM2(area);
+
+    const panelsParam = Number(params.get('panels'));
+    if (!Number.isNaN(panelsParam) && panelsParam >= 1 && panelsParam <= 200) {
+      setPanelCount(Math.min(getMaxPanelsForArea(resolvedArea, resolvedTech), panelsParam));
+    } else {
+      setPanelCount(getMaxPanelsForArea(resolvedArea, resolvedTech));
+    }
+
+    const panelPriceParam = Number(params.get('panelPrice'));
+    if (!Number.isNaN(panelPriceParam) && panelPriceParam >= 500 && panelPriceParam <= 50000) {
+      setCustomPanelPricesEgp((prev) => ({
+        ...prev,
+        [resolvedTech]: Math.round(panelPriceParam),
+      }));
+    }
+
     const budget = Number(params.get('budget'));
     if (!Number.isNaN(budget) && budget >= 40000 && budget <= 2000000) setBudgetEgp(budget);
     const bill = Number(params.get('bill'));
@@ -223,13 +263,14 @@ export default function PlanDayArcPage() {
     const params = new URLSearchParams(window.location.search);
     params.set('tech', techToShortKey(tech));
     params.set('area', String(usableAreaM2));
-    params.set('budget', String(budgetEgp));
+    params.set('panels', String(panelCount));
+    params.set('panelPrice', String(activePanelPriceEgp));
     if (locationChosen) {
       params.set('lat', site.cellLat.toFixed(2));
       params.set('lon', site.cellLon.toFixed(2));
     }
     window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tech, site.cellLat, site.cellLon, locationChosen, usableAreaM2, budgetEgp]);
+  }, [tech, site.cellLat, site.cellLon, locationChosen, usableAreaM2, panelCount, activePanelPriceEgp]);
 
   // Fetch live Open-Meteo weather for the snapped 0.25° ERA5 cell
   useEffect(() => {
@@ -259,10 +300,22 @@ export default function PlanDayArcPage() {
         lon: site.cellLon,
         usableAreaM2,
         budgetEgp,
+        panelCount,
+        panelUnitPriceEgp: activePanelPriceEgp,
         monthlyBillEgp,
         daytimeSharePct,
       }),
-    [tech, site.cellLat, site.cellLon, usableAreaM2, budgetEgp, monthlyBillEgp, daytimeSharePct]
+    [
+      tech,
+      site.cellLat,
+      site.cellLon,
+      usableAreaM2,
+      budgetEgp,
+      panelCount,
+      activePanelPriceEgp,
+      monthlyBillEgp,
+      daytimeSharePct,
+    ]
   );
 
   const forecast = useMemo(
@@ -542,7 +595,7 @@ export default function PlanDayArcPage() {
     ' Z';
 
   const peakKw = Math.max(...forecast.points.map((p) => p.pKw), 0);
-  const reportHref = `/report/${assessment.id}?tech=${tech}&lat=${site.cellLat}&lon=${site.cellLon}&area=${usableAreaM2}&budget=${budgetEgp}&bill=${monthlyBillEgp}`;
+  const reportHref = `/report/${assessment.id}?tech=${tech}&lat=${site.cellLat}&lon=${site.cellLon}&area=${usableAreaM2}&panels=${assessment.chosen.panelCount}&panelPrice=${activePanelPriceEgp}&budget=${assessment.chosen.capexEgp}&bill=${monthlyBillEgp}`;
 
   return (
     <div className="relative min-h-screen bg-[#05070f] text-[#f4f5fa]">
@@ -1076,7 +1129,7 @@ export default function PlanDayArcPage() {
           </div>
         </section>
 
-        {/* CHAPTER 6: SPACE, BUDGET & 3D ROOFTOP CONFIGURATOR */}
+        {/* CHAPTER 6: SPACE, PANELS & 3D ROOFTOP CONFIGURATOR */}
         <section
           id="space"
           ref={(el) => {
@@ -1096,8 +1149,8 @@ export default function PlanDayArcPage() {
               </div>
               <h2 data-gsap-item className="cinematic-h2 mt-2 mb-4">
                 {isAr
-                  ? 'كم مساحة السطح، وكم الميزانية؟'
-                  : 'How much roof, and how much budget?'}
+                  ? 'كم مساحة السطح، وكم عدد الألواح؟'
+                  : 'How much roof, and how many panels?'}
               </h2>
 
               <div className="grid items-center gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -1113,9 +1166,16 @@ export default function PlanDayArcPage() {
 
                 <div className="grid gap-3.5">
                   <div className="glass">
-                    <label htmlFor="area" className="block text-[13px] text-[#b9bdcf] mb-1">
-                      {isAr ? 'مساحة السطح المتاحة' : 'Usable roof area'}
-                    </label>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label htmlFor="area" className="block text-[13px] text-[#b9bdcf]">
+                        {isAr ? 'مساحة السطح المتاحة' : 'Usable roof area'}
+                      </label>
+                      <span className="font-mono text-[11px] text-[#9fe9e9]">
+                        {isAr
+                          ? `يتسع حتى ${maxRoofPanels} لوح (${PANEL_TECHNOLOGIES[tech].panelAreaM2} م² للوح)`
+                          : `Fits up to ${maxRoofPanels} panels (${PANEL_TECHNOLOGIES[tech].panelAreaM2} m² each)`}
+                      </span>
+                    </div>
                     <input
                       id="area"
                       type="range"
@@ -1123,7 +1183,11 @@ export default function PlanDayArcPage() {
                       max={200}
                       step={5}
                       value={usableAreaM2}
-                      onChange={(e) => setUsableAreaM2(Number(e.target.value))}
+                      onChange={(e) => {
+                        const nextArea = Number(e.target.value);
+                        setUsableAreaM2(nextArea);
+                        setPanelCount(getMaxPanelsForArea(nextArea, tech));
+                      }}
                       className="w-full"
                     />
                     <div className="mt-1 font-serif text-[24px] text-white">
@@ -1132,35 +1196,138 @@ export default function PlanDayArcPage() {
                   </div>
 
                   <div className="glass">
-                    <label htmlFor="budget" className="block text-[13px] text-[#b9bdcf] mb-1">
-                      {isAr ? 'الميزانية' : 'Budget'}
-                    </label>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label htmlFor="panels-count" className="block text-[13px] text-[#b9bdcf]">
+                        {isAr ? 'عدد الألواح الشمسية' : 'Number of panels'}
+                      </label>
+                      <span className="font-mono text-[11px] text-[#ffd166]">
+                        {assessment.chosen.kWp.toFixed(2)} kWp ({PANEL_TECHNOLOGIES[tech].panelWp} Wp / {isAr ? 'لوح' : 'panel'})
+                      </span>
+                    </div>
                     <input
-                      id="budget"
+                      id="panels-count"
                       type="range"
-                      min={50000}
-                      max={600000}
-                      step={10000}
-                      value={budgetEgp}
-                      onChange={(e) => setBudgetEgp(Number(e.target.value))}
+                      min={1}
+                      max={Math.max(1, maxRoofPanels)}
+                      step={1}
+                      value={assessment.chosen.panelCount}
+                      onChange={(e) => setPanelCount(Number(e.target.value))}
                       className="w-full"
                     />
-                    <div className="mt-1 font-serif text-[24px] text-white">
-                      EGP <span>{budgetEgp.toLocaleString('en-US')}</span>
+                    <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+                      <div className="font-serif text-[24px] text-white">
+                        <span>{assessment.chosen.panelCount}</span> {isAr ? 'لوحاً' : 'panels'}
+                        <span className="ml-2 text-xs font-sans text-[#b9bdcf]">
+                          ({assessment.chosen.roofAreaUsedM2} m² {isAr ? 'مستخدمة' : 'module area'})
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Provider Unit Panel Price Input */}
+                    <div className="mt-3 border-t border-white/[0.12] pt-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                        <label
+                          htmlFor="provider-panel-price"
+                          className="block text-[12px] font-medium text-[#b9bdcf]"
+                        >
+                          {isAr
+                            ? 'سعر اللوح الواحد حسب المورد (EGP / لوح)'
+                            : 'Provider price per panel (EGP / panel)'}
+                        </label>
+                        {activePanelPriceEgp !== defaultPanelPriceEgp && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCustomPanelPricesEgp((prev) => ({
+                                ...prev,
+                                [tech]: defaultPanelPriceEgp,
+                              }))
+                            }
+                            className="font-mono text-[10px] uppercase tracking-wider text-[#ffd166] underline hover:text-white"
+                          >
+                            {isAr
+                              ? `إعادة للسعر المرجعي (${defaultPanelPriceEgp.toLocaleString('en-US')})`
+                              : `Reset to market est. (EGP ${defaultPanelPriceEgp.toLocaleString('en-US')})`}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex items-center">
+                          <span className="pointer-events-none absolute left-3 font-mono text-xs text-[#b9bdcf]">
+                            EGP
+                          </span>
+                          <input
+                            id="provider-panel-price"
+                            type="number"
+                            min={1000}
+                            max={40000}
+                            step={50}
+                            value={activePanelPriceEgp}
+                            onChange={(e) => {
+                              const val = Math.max(500, Math.min(50000, Number(e.target.value) || 0));
+                              setCustomPanelPricesEgp((prev) => ({
+                                ...prev,
+                                [tech]: val,
+                              }));
+                            }}
+                            className="w-[138px] rounded-xl border border-white/20 bg-white/[0.07] py-1.5 pl-11 pr-3 font-mono text-sm font-semibold text-white focus:border-[#ffd166] focus:outline-none"
+                          />
+                        </div>
+                        <input
+                          type="range"
+                          aria-label="Provider price per panel slider"
+                          min={1500}
+                          max={18000}
+                          step={50}
+                          value={Math.min(18000, Math.max(1500, activePanelPriceEgp))}
+                          onChange={(e) =>
+                            setCustomPanelPricesEgp((prev) => ({
+                              ...prev,
+                              [tech]: Number(e.target.value),
+                            }))
+                          }
+                          className="flex-1"
+                        />
+                      </div>
+                      <div className="mt-1 text-[11px] text-[#b9bdcf]">
+                        {isAr
+                          ? `السعر التقديري في السوق لـ ${PANEL_TECHNOLOGIES[tech].nameAr}: ${defaultPanelPriceEgp.toLocaleString('en-US')} ج.م/لوح (${(activePanelPriceEgp / PANEL_TECHNOLOGIES[tech].panelWp).toFixed(1)} ج.م/واط)`
+                          : `Market estimate for ${PANEL_TECHNOLOGIES[tech].nameEn}: EGP ${defaultPanelPriceEgp.toLocaleString('en-US')}/panel (${(activePanelPriceEgp / PANEL_TECHNOLOGIES[tech].panelWp).toFixed(1)} EGP/Wp)`}
+                      </div>
                     </div>
                   </div>
 
                   <div className="glass">
                     <div className="font-mono text-xs uppercase tracking-[0.1em] text-[#b9bdcf]">
-                      {isAr ? 'يتناسب مع سطحك وميزانيتك' : 'Fits your roof and budget'}
+                      {isAr
+                        ? 'التكلفة التقديرية للألواح والنظام'
+                        : 'Estimated price of panels & turnkey budget'}
                     </div>
-                    <div className="mt-1 font-serif text-[28px] leading-[1.15] text-white">
-                      <span>{assessment.chosen.panelCount}</span> {isAr ? 'لوحاً' : 'panels'}
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <div className="font-serif text-[28px] leading-[1.15] text-[#ffd166]">
+                        EGP <span>{assessment.chosen.itemizedCost.panelsEgp.toLocaleString('en-US')}</span>
+                      </div>
+                      <span className="font-mono text-xs text-white/85">
+                        ({assessment.chosen.panelCount} × EGP {activePanelPriceEgp.toLocaleString('en-US')}{' '}
+                        {isAr ? 'فقط للألواح' : 'panels only'})
+                      </span>
                     </div>
-                    <div className="mt-1 text-[13px] text-[#b9bdcf]">
-                      <span>{assessment.chosen.kWp.toFixed(2)}</span> kWp ·{' '}
-                      {isAr ? 'محدود بـ ' : 'limited by '}
-                      <b className="text-[#ffd166]">{assessment.chosen.bindingLimit}</b>
+                    <div className="mt-1.5 text-[13px] text-[#b9bdcf]">
+                      {isAr ? 'التكلفة الكلية شاملة التركيب والإنفرتر: ' : 'Full turnkey installed budget: '}
+                      <b className="text-white">
+                        EGP {assessment.chosen.capexEgp.toLocaleString('en-US')}
+                      </b>{' '}
+                      <span className="text-xs text-[#b9bdcf]">
+                        (+ {isAr ? 'إنفرتر' : 'Inverter'} EGP{' '}
+                        {assessment.chosen.itemizedCost.inverterEgp.toLocaleString('en-US')} ·{' '}
+                        {isAr ? 'شاسيه وتركيب' : 'Mounting & BOS'} EGP{' '}
+                        {(
+                          assessment.chosen.itemizedCost.mountingEgp +
+                          assessment.chosen.itemizedCost.installationEgp
+                        ).toLocaleString('en-US')}
+                        )
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1169,8 +1336,8 @@ export default function PlanDayArcPage() {
               <div className="mt-3 text-xs text-[#b9bdcf]">
                 <span className="tag-pill mr-2">simulated sizing</span>
                 {isAr
-                  ? 'يحسب عدد الألواح باستخدام معامل تعبئة 0.70 وأسعار مصر المرجعية الموثقة.'
-                  : 'Panel count uses a 0.70 roof packing factor and documented Egyptian turnkey reference prices.'}
+                  ? 'يحسب عدد الألواح باستخدام معامل تعبئة 0.72 وسعر اللوح المحدد من المورد.'
+                  : 'Panel sizing uses a 0.72 roof packing factor and your provider price per panel.'}
               </div>
             </div>
           </div>
@@ -1352,22 +1519,12 @@ export default function PlanDayArcPage() {
                 className="glass mt-3 flex flex-wrap items-center gap-3 py-3.5 px-4"
               >
                 <span className="tag-pill">
-                  {assessment.chosen.bindingLimit === 'area'
-                    ? isAr
-                      ? 'المساحة هي الحد الحاكم'
-                      : 'Roof is the limit'
-                    : isAr
-                      ? 'الميزانية هي الحد الحاكم'
-                      : 'Budget is the limit'}
+                  {isAr ? 'تفصيل تكلفة المورد' : 'Provider Cost Breakdown'}
                 </span>
                 <span className="text-[14px] text-[#b9bdcf]">
-                  {assessment.chosen.bindingLimit === 'area'
-                    ? isAr
-                      ? `يتبقى لديك ${Math.max(0, budgetEgp - assessment.chosen.capexEgp).toLocaleString('en-US')} ج.م من الميزانية. اختيار تكنولوجيا أعلى كفاءة (HJT) يتيح قدرة أكبر على نفس السطح.`
-                      : `You have EGP ${Math.max(0, budgetEgp - assessment.chosen.capexEgp).toLocaleString('en-US')} of budget left. A higher-efficiency technology (HJT) packs more kWp on the same roof.`
-                    : isAr
-                      ? 'لديك مساحة سطح غير مستغلة. اختيار لوح أقل تكلفة لكل واط (Polycrystalline) يعظم القدرة ضمن ميزانيتك.'
-                      : 'You have unused roof space. A lower-cost per Wp panel (Polycrystalline) maximizes kWp within your budget.'}
+                  {isAr
+                    ? `تكلفة الألواح: ${assessment.chosen.itemizedCost.panelsEgp.toLocaleString('en-US')} ج.م (${assessment.chosen.panelCount} لوح × ${assessment.chosen.panelUnitPriceEgp.toLocaleString('en-US')} ج.م/لوح) · الإنفرتر والتركيب: ${(assessment.chosen.capexEgp - assessment.chosen.itemizedCost.panelsEgp).toLocaleString('en-US')} ج.م.`
+                    : `Panels hardware: EGP ${assessment.chosen.itemizedCost.panelsEgp.toLocaleString('en-US')} (${assessment.chosen.panelCount} panels × EGP ${assessment.chosen.panelUnitPriceEgp.toLocaleString('en-US')}/panel) · Inverter, mounting & BOS: EGP ${(assessment.chosen.capexEgp - assessment.chosen.itemizedCost.panelsEgp).toLocaleString('en-US')}.`}
                 </span>
               </div>
 
@@ -1377,16 +1534,17 @@ export default function PlanDayArcPage() {
                     ? 'التقنيات الثلاث على سطحك (انقر للتبديل)'
                     : 'All three technologies on your roof'}
                 </div>
-                <table className="w-full min-w-[480px] border-collapse text-left text-[13px]">
+                <table className="w-full min-w-[540px] border-collapse text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-white/[0.16] text-[#b9bdcf]">
                       <th className="p-1.5">{isAr ? 'التكنولوجيا' : 'Technology'}</th>
                       <th className="p-1.5">{isAr ? 'الألواح' : 'Panels'}</th>
                       <th className="p-1.5">kWp</th>
-                      <th className="p-1.5">{isAr ? 'التكلفة (EGP)' : 'Cost (EGP)'}</th>
+                      <th className="p-1.5">{isAr ? 'سعر اللوح' : 'Panel (EGP)'}</th>
+                      <th className="p-1.5">{isAr ? 'إجمالي الألواح' : 'Panels Cost'}</th>
+                      <th className="p-1.5">{isAr ? 'التكلفة الكلية' : 'Turnkey (EGP)'}</th>
                       <th className="p-1.5">{isAr ? 'إنتاج / سنة' : 'kWh / yr'}</th>
                       <th className="p-1.5">{isAr ? 'الاسترداد' : 'Payback'}</th>
-                      <th className="p-1.5">{isAr ? 'الحد الحاكم' : 'Binding Limit'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1408,10 +1566,13 @@ export default function PlanDayArcPage() {
                           </td>
                           <td className="py-2 px-1.5">{row.panelCount}</td>
                           <td className="py-2 px-1.5">{row.kWp.toFixed(2)}</td>
+                          <td className="py-2 px-1.5">{row.panelUnitPriceEgp.toLocaleString('en-US')}</td>
+                          <td className="py-2 px-1.5 text-[#ffd166]">
+                            {row.itemizedCost.panelsEgp.toLocaleString('en-US')}
+                          </td>
                           <td className="py-2 px-1.5">{row.capexEgp.toLocaleString('en-US')}</td>
                           <td className="py-2 px-1.5">{row.annualKwh.toLocaleString('en-US')}</td>
                           <td className="py-2 px-1.5">{row.simplePaybackYears} y</td>
-                          <td className="py-2 px-1.5 capitalize">{row.bindingLimit}</td>
                         </tr>
                       );
                     })}

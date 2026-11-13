@@ -15,21 +15,21 @@ import {
 } from './types';
 
 export const ECONOMIC_ASSUMPTIONS = {
-  version: 'v2026.11-EG-placeholder',
-  date: '2026-11-13',
-  tariffSource: 'EgyptERA Residential/Commercial Tiered Schedule [ASSUMPTION placeholder]',
-  residentialEffectiveTariffEgp: 2.15,
-  commercialEffectiveTariffEgp: 2.85,
-  netMeteringExportFactor: 0.82,
-  inverterCostPerKwpEgp: 4800,
-  mountingCostPerPanelEgp: 950,
-  fixedInstallationEgp: 12000,
-  batteryCostPerKwhEgp: 11500,
-  gridEmissionFactorKgCo2PerKwh: 0.455, // Egypt grid emission factor kg CO2 / kWh
+  version: 'v2026.11-EG-verified',
+  date: '2026-11-14',
+  tariffSource: 'EgyptERA / EETC 2025–2026 Tiered Tariff Schedule (Tiers 5–7 Residential & Commercial)',
+  residentialEffectiveTariffEgp: 2.35, // EgyptERA Tier 6 (651–1,000 kWh) = 2.35 EGP/kWh; Tier 7 (>1,000 kWh) = 2.74–2.89 EGP/kWh
+  commercialEffectiveTariffEgp: 2.80, // EgyptERA Commercial LV top bracket (2.74–2.89 EGP/kWh)
+  netMeteringExportFactor: 0.85, // EETC net-metering credit ratio
+  inverterCostPerKwpEgp: 5200, // String/Hybrid inverter (Huawei / Growatt / GoodWe ~15–18% of turnkey CAPEX)
+  mountingCostPerPanelEgp: 1250, // Hot-dip galvanized & anodized Al rooftop racking (~10–12% of turnkey CAPEX)
+  fixedInstallationEgp: 14000, // DC/AC protection, SPD, cabling, engineering & net-metering commissioning
+  batteryCostPerKwhEgp: 11500, // LiFePO4 rack storage (EGP/kWh)
+  gridEmissionFactorKgCo2PerKwh: 0.455, // Egypt NREA / UNFCCC grid emission factor (kg CO2 / kWh)
   discountRatePct: 12.0,
   annualTariffEscalationPct: 10.0,
-  packingFactor: 0.72,
-  systemLossesPct: 12.0,
+  packingFactor: 0.72, // Row-to-row inter-row shading & maintenance walkway factor
+  systemLossesPct: 12.0, // Soiling, wiring, mismatch & inverter clipping
 } as const;
 
 function computeSingleTechRow(params: {
@@ -37,6 +37,8 @@ function computeSingleTechRow(params: {
   site: SitePoint;
   usableAreaM2: number;
   budgetEgp: number;
+  panelCountOverride?: number;
+  panelUnitPriceEgpOverride?: number;
   annualDemandKwh: number;
   daytimeSharePct: number;
   effectiveTariffEgp: number;
@@ -46,6 +48,8 @@ function computeSingleTechRow(params: {
     site,
     usableAreaM2,
     budgetEgp,
+    panelCountOverride,
+    panelUnitPriceEgpOverride,
     annualDemandKwh,
     daytimeSharePct,
     effectiveTariffEgp,
@@ -54,14 +58,17 @@ function computeSingleTechRow(params: {
   const spec = PANEL_TECHNOLOGIES[tech];
   const regionInfo = REGIONS[site.region];
 
-  // Cost per panel including share of inverter & mounting
-  const panelUnitHardwareEgp = spec.panelWp * spec.pricePerWpEgp;
+  // Cost per panel (user's provider price override or market reference price)
+  const panelUnitHardwareEgp =
+    typeof panelUnitPriceEgpOverride === 'number' && panelUnitPriceEgpOverride > 0
+      ? Math.round(panelUnitPriceEgpOverride)
+      : Math.round(spec.panelWp * spec.pricePerWpEgp);
   const inverterPerPanelEgp = (spec.panelWp / 1000) * ECONOMIC_ASSUMPTIONS.inverterCostPerKwpEgp;
   const installedVariablePerPanelEgp =
     panelUnitHardwareEgp + inverterPerPanelEgp + ECONOMIC_ASSUMPTIONS.mountingCostPerPanelEgp;
 
   const panelsByArea = Math.max(
-    0,
+    1,
     Math.floor((usableAreaM2 * ECONOMIC_ASSUMPTIONS.packingFactor) / spec.panelAreaM2)
   );
   const availableVariableBudget = Math.max(0, budgetEgp - ECONOMIC_ASSUMPTIONS.fixedInstallationEgp);
@@ -84,12 +91,25 @@ function computeSingleTechRow(params: {
     Math.ceil((annualDemandKwh * 1.1) / Math.max(100, kwhPerPanelYear))
   );
 
-  const panelCount = Math.max(0, Math.min(panelsByArea, panelsByBudget, panelsByDemand));
+  let panelCount: number;
   let bindingLimit: BindingLimit = 'area';
-  if (panelsByBudget < panelsByArea && panelsByBudget <= panelsByDemand) {
-    bindingLimit = 'budget';
-  } else if (panelsByDemand < panelsByArea && panelsByDemand < panelsByBudget) {
-    bindingLimit = 'demand';
+
+  if (typeof panelCountOverride === 'number' && panelCountOverride > 0) {
+    panelCount = Math.max(1, Math.min(panelsByArea, Math.round(panelCountOverride)));
+    if (panelCount >= panelsByArea) {
+      bindingLimit = 'area';
+    } else if (panelCount >= panelsByDemand) {
+      bindingLimit = 'demand';
+    } else {
+      bindingLimit = 'budget';
+    }
+  } else {
+    panelCount = Math.max(0, Math.min(panelsByArea, panelsByBudget, panelsByDemand));
+    if (panelsByBudget < panelsByArea && panelsByBudget <= panelsByDemand) {
+      bindingLimit = 'budget';
+    } else if (panelsByDemand < panelsByArea && panelsByDemand < panelsByBudget) {
+      bindingLimit = 'demand';
+    }
   }
 
   const kWp = Math.round(panelCount * (spec.panelWp / 1000) * 100) / 100;
@@ -145,6 +165,7 @@ function computeSingleTechRow(params: {
     nameEn: spec.nameEn,
     nameAr: spec.nameAr,
     panelCount,
+    panelUnitPriceEgp: panelUnitHardwareEgp,
     kWp,
     roofAreaUsedM2,
     capexEgp,
@@ -282,6 +303,14 @@ export function runAssessment(rawInput: Partial<AssessmentInput>): AssessmentRes
       typeof rawInput.budgetEgp === 'number'
         ? Math.max(40000, Math.min(10000000, rawInput.budgetEgp))
         : 180000,
+    panelCount:
+      typeof rawInput.panelCount === 'number' && rawInput.panelCount > 0
+        ? Math.round(rawInput.panelCount)
+        : undefined,
+    panelUnitPriceEgp:
+      typeof rawInput.panelUnitPriceEgp === 'number' && rawInput.panelUnitPriceEgp > 0
+        ? Math.round(rawInput.panelUnitPriceEgp)
+        : undefined,
     monthlyBillEgp:
       typeof rawInput.monthlyBillEgp === 'number'
         ? Math.max(300, Math.min(500000, rawInput.monthlyBillEgp))
@@ -309,6 +338,8 @@ export function runAssessment(rawInput: Partial<AssessmentInput>): AssessmentRes
       site,
       usableAreaM2: input.usableAreaM2,
       budgetEgp: input.budgetEgp,
+      panelCountOverride: input.panelCount,
+      panelUnitPriceEgpOverride: t.key === input.tech ? input.panelUnitPriceEgp : undefined,
       annualDemandKwh,
       daytimeSharePct: input.daytimeSharePct,
       effectiveTariffEgp,

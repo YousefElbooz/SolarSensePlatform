@@ -165,19 +165,17 @@ export default function SiteDetailSchedulerPage() {
               </div>
 
               <div>
-                <label className="block font-mono text-xs text-[#b9bdcf]">
+                <label className="block font-mono text-xs text-[#b4b8cb]">
                   Required Contiguous Duration
                 </label>
-                <div className="mt-2 grid grid-cols-5 gap-2">
+                <div className="apple-segmented mt-2 flex w-full" role="group" aria-label="Duration">
                   {[1, 2, 3, 4, 6].map((d) => (
                     <button
                       key={d}
                       type="button"
                       onClick={() => setDurationH(d)}
-                      className={`rounded-full border py-2 font-mono text-xs transition ${
-                        durationH === d
-                          ? 'border-[#f5a524] bg-[#f5a524] font-semibold text-[#221500]'
-                          : 'border-white/[0.16] bg-white/[0.04] text-[#b9bdcf] hover:border-white/40'
+                      className={`apple-segment-btn flex-1 font-mono text-xs ${
+                        durationH === d ? 'active' : ''
                       }`}
                     >
                       {d} hr{d > 1 ? 's' : ''}
@@ -187,10 +185,10 @@ export default function SiteDetailSchedulerPage() {
               </div>
 
               <div>
-                <label className="block font-mono text-xs text-[#b9bdcf]">
+                <label className="block font-mono text-xs text-[#b4b8cb]">
                   Simulated Atmospheric Regime
                 </label>
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="apple-segmented mt-2 flex w-full" role="group" aria-label="Atmospheric Regime">
                   {(
                     [
                       { id: 'clear', label: 'Clear Sky' },
@@ -202,10 +200,8 @@ export default function SiteDetailSchedulerPage() {
                       key={sc.id}
                       type="button"
                       onClick={() => setSkyCondition(sc.id)}
-                      className={`rounded-full border py-2 font-mono text-xs transition ${
-                        skyCondition === sc.id
-                          ? 'border-[#3fc1c1] bg-[#3fc1c1] font-semibold text-[#05070f]'
-                          : 'border-white/[0.16] bg-white/[0.04] text-[#b9bdcf]'
+                      className={`apple-segment-btn flex-1 font-mono text-xs ${
+                        skyCondition === sc.id ? 'active' : ''
                       }`}
                     >
                       {sc.label}

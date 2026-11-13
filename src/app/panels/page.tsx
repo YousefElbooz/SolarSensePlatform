@@ -153,16 +153,14 @@ export default function PanelsTechnologyLabPage() {
               </div>
 
               <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-1.5 text-xs">
+                <div className="apple-segmented flex-wrap" role="group" aria-label="Sky Condition">
                   {(['clear', 'dust', 'cloud', 'heatwave'] as SkyCondition[]).map((sk) => (
                     <button
                       key={sk}
                       type="button"
                       onClick={() => setSkyCondition(sk)}
-                      className={`rounded-full px-3.5 py-1.5 capitalize transition ${
-                        skyCondition === sk
-                          ? 'bg-[#f5a524] font-semibold text-[#221500]'
-                          : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf] hover:text-white'
+                      className={`apple-segment-btn text-xs capitalize ${
+                        skyCondition === sk ? 'active' : ''
                       }`}
                     >
                       {sk === 'dust' ? 'Khamaseen Dust' : sk}

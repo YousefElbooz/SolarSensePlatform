@@ -27,6 +27,8 @@ function BusinessReportContent() {
   const lat = Number(searchParams.get('lat') ?? 30.04);
   const lon = Number(searchParams.get('lon') ?? 31.24);
   const area = Number(searchParams.get('area') ?? 40);
+  const panels = Number(searchParams.get('panels') ?? 0);
+  const panelPrice = Number(searchParams.get('panelPrice') ?? 0);
   const budget = Number(searchParams.get('budget') ?? 180000);
   const bill = Number(searchParams.get('bill') ?? 2400);
 
@@ -37,10 +39,12 @@ function BusinessReportContent() {
         lat: Number.isNaN(lat) ? 30.04 : lat,
         lon: Number.isNaN(lon) ? 31.24 : lon,
         usableAreaM2: Number.isNaN(area) ? 40 : area,
+        panelCount: !Number.isNaN(panels) && panels > 0 ? panels : undefined,
+        panelUnitPriceEgp: !Number.isNaN(panelPrice) && panelPrice > 0 ? panelPrice : undefined,
         budgetEgp: Number.isNaN(budget) ? 180000 : budget,
         monthlyBillEgp: Number.isNaN(bill) ? 2400 : bill,
       }),
-    [tech, lat, lon, area, budget, bill]
+    [tech, lat, lon, area, panels, panelPrice, budget, bill]
   );
 
   const reportId = (params?.id as string) || assessment.id;

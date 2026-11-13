@@ -148,6 +148,7 @@ export interface TechComparisonRow {
   nameEn: string;
   nameAr: string;
   panelCount: number;
+  panelUnitPriceEgp: number;
   kWp: number;
   roofAreaUsedM2: number;
   capexEgp: number;
@@ -190,6 +191,8 @@ export interface AssessmentInput {
   lon: number;
   usableAreaM2: number;
   budgetEgp: number;
+  panelCount?: number;
+  panelUnitPriceEgp?: number;
   monthlyBillEgp: number;
   daytimeSharePct: number;
   sector: 'residential' | 'commercial';

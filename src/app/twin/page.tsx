@@ -1072,16 +1072,16 @@ function DigitalTwinContent() {
       id: 'sun',
       pillLabel: (
         <>
-          01 · Solar Geometry (<i className="font-serif">α</i>
+          Solar Geometry (<i className="font-serif">α</i>
           <sub>s</sub>, <i className="font-serif">γ</i>
           <sub>s</sub>)
         </>
       ),
       title: isAr ? (
-        '01 · الهندسة الفلكية للشمس'
+        'الهندسة الفلكية للشمس'
       ) : (
         <>
-          01 · Solar Geometry (<i className="font-serif">α</i>
+          Solar Geometry (<i className="font-serif">α</i>
           <sub>s</sub>, <i className="font-serif">γ</i>
           <sub>s</sub>)
         </>
@@ -1148,15 +1148,15 @@ function DigitalTwinContent() {
       id: 'array',
       pillLabel: (
         <>
-          02 · PV Array &amp; Faiman <i className="font-serif">T</i>
+          PV Array &amp; Faiman <i className="font-serif">T</i>
           <sub>c</sub>
         </>
       ),
       title: isAr ? (
-        '02 · مصفوفة الألواح وحرارة الخلية'
+        'مصفوفة الألواح وحرارة الخلية'
       ) : (
         <>
-          02 · PV Array &amp; Faiman <i className="font-serif">T</i>
+          PV Array &amp; Faiman <i className="font-serif">T</i>
           <sub>c</sub>
         </>
       ),
@@ -1251,15 +1251,15 @@ function DigitalTwinContent() {
       id: 'inverter',
       pillLabel: (
         <>
-          03 · Hybrid Inverter (<i className="font-serif">P</i>
+          Hybrid Inverter (<i className="font-serif">P</i>
           <sub>AC</sub>)
         </>
       ),
       title: isAr ? (
-        '03 · العاكس الهجين (MPPT)'
+        'العاكس الهجين (MPPT)'
       ) : (
         <>
-          03 · Hybrid Inverter (<i className="font-serif">P</i>
+          Hybrid Inverter (<i className="font-serif">P</i>
           <sub>AC</sub>)
         </>
       ),
@@ -1330,14 +1330,14 @@ function DigitalTwinContent() {
       id: 'battery',
       pillLabel: (
         <>
-          04 · LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
+          LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
         </>
       ),
       title: isAr ? (
-        '04 · بطاريات LiFePO₄'
+        'بطاريات LiFePO₄'
       ) : (
         <>
-          04 · LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
+          LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
         </>
       ),
       color: '#3fc1c1',
@@ -1405,15 +1405,15 @@ function DigitalTwinContent() {
       id: 'load',
       pillLabel: (
         <>
-          05 · Facility Load (<i className="font-serif">P</i>
+          Facility Load (<i className="font-serif">P</i>
           <sub>load</sub>)
         </>
       ),
       title: isAr ? (
-        '05 · أحمال المبنى والتكييف'
+        'أحمال المبنى والتكييف'
       ) : (
         <>
-          05 · Facility &amp; HVAC (<i className="font-serif">P</i>
+          Facility &amp; HVAC (<i className="font-serif">P</i>
           <sub>load</sub>)
         </>
       ),
@@ -1481,15 +1481,15 @@ function DigitalTwinContent() {
       id: 'grid',
       pillLabel: (
         <>
-          06 · EETC Grid (<i className="font-serif">P</i>
+          EETC Grid (<i className="font-serif">P</i>
           <sub>grid</sub>)
         </>
       ),
       title: isAr ? (
-        '06 · محطة الربط بالشبكة'
+        'محطة الربط بالشبكة'
       ) : (
         <>
-          06 · EETC Grid (<i className="font-serif">P</i>
+          EETC Grid (<i className="font-serif">P</i>
           <sub>grid</sub>)
         </>
       ),
@@ -1564,50 +1564,53 @@ function DigitalTwinContent() {
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => setShowEquationsHud((s) => !s)}
-              className={showEquationsHud ? 'btn-pill-primary' : 'btn-pill'}
+              aria-pressed={showEquationsHud}
+              className={`btn-pill ${showEquationsHud ? 'border-[#ffd60a]/60 bg-white/[0.12] text-white' : ''}`}
             >
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className={`h-3.5 w-3.5 ${showEquationsHud ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
               <span>{isAr ? 'المعادلات العائمة 3D' : '3D Math HUDs'}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setHeatmapMode('power')}
-              className={heatmapMode === 'power' ? 'btn-pill-primary' : 'btn-pill'}
-            >
-              <Zap className="h-3.5 w-3.5" />
-              <span>
-                {isAr ? 'خريطة القدرة' : 'Power'} (<i className="font-serif">P</i>
-                <sub>AC</sub>)
-              </span>
-            </button>
+            <div className="apple-segmented" role="group" aria-label="Heatmap Mode">
+              <button
+                type="button"
+                onClick={() => setHeatmapMode('power')}
+                className={`apple-segment-btn ${heatmapMode === 'power' ? 'active' : ''}`}
+              >
+                <Zap className={`h-3.5 w-3.5 ${heatmapMode === 'power' ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
+                <span>
+                  {isAr ? 'القدرة' : 'Power'} (<i className="font-serif">P</i>
+                  <sub>AC</sub>)
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setHeatmapMode('temperature')}
-              className={heatmapMode === 'temperature' ? 'btn-pill-primary' : 'btn-pill'}
-            >
-              <Thermometer className="h-3.5 w-3.5" />
-              <span>
-                {isAr ? 'حرارة الخلية' : 'Cell Temp'} (<i className="font-serif">T</i>
-                <sub>c</sub>)
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setHeatmapMode('temperature')}
+                className={`apple-segment-btn ${heatmapMode === 'temperature' ? 'active' : ''}`}
+              >
+                <Thermometer className={`h-3.5 w-3.5 ${heatmapMode === 'temperature' ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
+                <span>
+                  {isAr ? 'حرارة الخلية' : 'Cell Temp'} (<i className="font-serif">T</i>
+                  <sub>c</sub>)
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Single-Row Camera Focus & Subsystem Selector Bar */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => focusCameraOnNode('overview')}
-            className="rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-xs text-[#f4f5fa] transition hover:border-[#ffd166]"
+            className="min-h-[34px] cursor-pointer rounded-full border border-white/15 bg-white/[0.05] px-3.5 py-1.5 text-xs font-medium text-[#f5f5f7] transition hover:border-white/30 active:scale-[0.97]"
           >
-            <Compass className="mr-1.5 inline h-3.5 w-3.5 text-[#ffd166]" />
+            <Compass className="mr-1.5 inline h-3.5 w-3.5 text-[#ffd60a]" />
             {isAr ? 'مشهد شامل (Overview)' : 'Full Plant Overview'}
           </button>
           {nodeBadges.map((node) => {
@@ -1617,10 +1620,10 @@ function DigitalTwinContent() {
                 key={node.id}
                 type="button"
                 onClick={() => focusCameraOnNode(node.id)}
-                className={`rounded-full border px-3.5 py-1.5 text-xs transition ${
+                className={`min-h-[34px] cursor-pointer rounded-full border px-3.5 py-1.5 text-xs transition active:scale-[0.97] ${
                   active
-                    ? 'border-[#ffd166] bg-[#f5a524]/20 font-semibold text-[#ffd166]'
-                    : 'border-white/12 bg-white/[0.03] text-[#b9bdcf] hover:border-white/30 hover:text-white'
+                    ? 'border-[#ffd60a]/65 bg-white/[0.14] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]'
+                    : 'border-white/10 bg-white/[0.03] text-[#b4b8cb] hover:border-white/25 hover:text-white'
                 }`}
               >
                 {node.pillLabel}
@@ -1700,10 +1703,10 @@ function DigitalTwinContent() {
                       style={{
                         borderColor: isSel ? '#ffd166' : b.borderColor,
                       }}
-                      className={`group absolute z-10 w-max max-w-[270px] -translate-x-1/2 -translate-y-full cursor-pointer rounded-xl border bg-[#060916]/90 px-3 py-1.5 text-left backdrop-blur-md transition-shadow duration-200 ${
+                      className={`liquid-glass group absolute z-10 w-max max-w-[270px] -translate-x-1/2 -translate-y-full cursor-pointer rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 active:scale-[0.98] ${
                         isSel
-                          ? 'ring-2 ring-[#ffd166]/55 shadow-[0_0_24px_rgba(245,165,36,0.35)]'
-                          : 'hover:border-[#ffd166]'
+                          ? 'ring-2 ring-[#ffd60a]/60 shadow-[0_8px_28px_rgba(245,158,11,0.3)]'
+                          : 'hover:border-[#ffd60a]/70'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -1839,19 +1842,17 @@ function DigitalTwinContent() {
                 </div>
 
                 <div>
-                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
+                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b4b8cb]">
                     Season (δ)
                   </label>
-                  <div className="mt-1.5 flex gap-1">
+                  <div className="apple-segmented mt-1.5 flex w-full" role="group" aria-label="Season">
                     {(['winter', 'spring', 'summer', 'autumn'] as SeasonId[]).map((s) => (
                       <button
                         key={s}
                         type="button"
                         onClick={() => setSeason(s)}
-                        className={`flex-1 rounded-full py-1.5 text-[11px] capitalize transition ${
-                          season === s
-                            ? 'bg-[#f5a524] font-semibold text-[#221500]'
-                            : 'bg-white/[0.06] text-[#b9bdcf] hover:text-white'
+                        className={`apple-segment-btn flex-1 px-2 text-[11px] capitalize ${
+                          season === s ? 'active' : ''
                         }`}
                       >
                         {s}
@@ -1861,21 +1862,19 @@ function DigitalTwinContent() {
                 </div>
 
                 <div>
-                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
+                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b4b8cb]">
                     Sky Condition (
                     <i className="font-serif lowercase">k</i>
                     <sub>c</sub>)
                   </label>
-                  <div className="mt-1.5 flex gap-1">
+                  <div className="apple-segmented mt-1.5 flex w-full" role="group" aria-label="Sky Condition">
                     {(['clear', 'dust', 'cloud', 'heatwave'] as SkyCondition[]).map((sk) => (
                       <button
                         key={sk}
                         type="button"
                         onClick={() => setSkyCondition(sk)}
-                        className={`flex-1 rounded-full py-1.5 text-[11px] capitalize transition ${
-                          skyCondition === sk
-                            ? 'bg-[#3fc1c1] font-semibold text-[#05070f]'
-                            : 'bg-white/[0.06] text-[#b9bdcf] hover:text-white'
+                        className={`apple-segment-btn flex-1 px-2 text-[11px] capitalize ${
+                          skyCondition === sk ? 'active' : ''
                         }`}
                       >
                         {sk}
@@ -1895,17 +1894,15 @@ function DigitalTwinContent() {
                 {systemKwp} kWp ({panelCount} × {tech})
               </h2>
 
-              <div className="mt-4 space-y-3 rounded-2xl border border-white/[0.14] bg-white/[0.03] p-3.5">
-                <div className="flex gap-1.5">
+              <div className="mt-4 space-y-3 rounded-2xl border border-white/[0.1] bg-[#171c2e]/80 p-3.5">
+                <div className="apple-segmented flex w-full" role="group" aria-label="Panel Technology">
                   {PANEL_TECH_LIST.map((t) => (
                     <button
                       key={t.key}
                       type="button"
                       onClick={() => setTech(t.key)}
-                      className={`flex-1 rounded-full py-1.5 font-mono text-xs transition ${
-                        tech === t.key
-                          ? 'bg-[#f5a524] font-bold text-[#221500]'
-                          : 'bg-white/[0.06] text-[#b9bdcf] hover:text-white'
+                      className={`apple-segment-btn flex-1 font-mono text-xs ${
+                        tech === t.key ? 'active' : ''
                       }`}
                     >
                       {t.key}

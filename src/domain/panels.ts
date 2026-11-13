@@ -21,13 +21,13 @@ export const PANEL_TECHNOLOGIES: Record<PanelTech, PanelTechnologyInfo> = {
     noctC: 45,
     areaPerKwpLabel: '~6 m²',
     priceTier: '●○○',
-    pricePerWpEgp: 28,
+    pricePerWpEgp: 14.5, // Module-only EGP/Wp (~4,785 EGP per 330W panel; ~26.5 EGP/Wp turnkey installed)
     bestFitEn: 'Budget-limited installations with generous roof or ground space',
     bestFitAr: 'الميزانيات المحدودة مع توفر مساحة سطح أو أرض كافية',
     calloutsEn: [
-      'Blue grained multicrystalline wafer · 60 cells',
-      'Thermal loss γ = −0.42%/°C above 25°C STC',
-      'Anodized silver Al frame · 330 Wp (1.94 m²)',
+      '72-cell multicrystalline wafer · 1,956 × 992 mm (1.94 m²)',
+      'Thermal loss γ = −0.42%/°C above 25°C STC (IEC 61215)',
+      'Anodized silver Al frame · 330 Wp (η = 17.0%)',
     ],
     calloutsAr: [
       'خلايا سيليكون متعددة التبلور · 60 خلية',
@@ -52,13 +52,13 @@ export const PANEL_TECHNOLOGIES: Record<PanelTech, PanelTechnologyInfo> = {
     noctC: 43,
     areaPerKwpLabel: '~5 m²',
     priceTier: '●●●',
-    pricePerWpEgp: 39,
+    pricePerWpEgp: 20.5, // Module-only EGP/Wp (~8,200 EGP per 400W HJT panel; ~31.3 EGP/Wp turnkey installed)
     bestFitEn: 'Space-limited roofs & extreme heat regions (Western Desert, Upper Egypt)',
     bestFitAr: 'الأسطح المحدودة والمناطق شديدة الحرارة (الصعيد والواحات)',
     calloutsEn: [
-      'a-Si:H passivated monocrystalline wafer · 20.6% eff.',
-      'Industry-best heat resilience γ = −0.26%/°C',
-      '9-busbar half-cut cell architecture · 400 Wp',
+      'a-Si:H passivated monocrystalline wafer · 20.6% eff. (1.94 m²)',
+      'Industry-best heat resilience γ = −0.26%/°C (NREL / CEC verified)',
+      'Half-cut multi-busbar HJT architecture · 400 Wp',
     ],
     calloutsAr: [
       'رقائق أحادية مغلفة بسيليكون غير متبلور · كفاءة 20.6%',
@@ -83,13 +83,13 @@ export const PANEL_TECHNOLOGIES: Record<PanelTech, PanelTechnologyInfo> = {
     noctC: 46,
     areaPerKwpLabel: '~7–8 m²',
     priceTier: '●●○',
-    pricePerWpEgp: 33,
+    pricePerWpEgp: 17.0, // Module-only EGP/Wp (~2,975 EGP per 175W CIS/CIGS panel; ~29.8 EGP/Wp turnkey installed)
     bestFitEn: 'Coastal haze, diffuse skies, lightweight roofs & East/West tilts',
     bestFitAr: 'المناطق الساحلية والضباب الخفيف والأسطح خفيفة الوزن',
     calloutsEn: [
-      'Monolithic laser-scribed thin film · broad spectrum',
-      'Moderate thermal loss γ = −0.33%/°C · low-light gain',
-      'Sleek frameless-look black module · 175 Wp (1.23 m²)',
+      'Solar Frontier SF170/175-S footprint · 1,257 × 977 mm (1.23 m²)',
+      'Moderate thermal loss γ = −0.33%/°C · coastal diffuse spectral gain',
+      'Cadmium-free monolithic thin-film · 175 Wp (η = 14.2%)',
     ],
     calloutsAr: [
       'طبقة رقيقة متجانسة محفورة بالليزر · طيف واسع',
@@ -117,4 +117,18 @@ export function normalizePanelTech(raw?: string | null): PanelTech {
 
 export function techToShortKey(tech: PanelTech): 'pc' | 'hjt' | 'cigs' {
   return PANEL_TECHNOLOGIES[tech].shortKey;
+}
+
+export function getDefaultPanelPriceEgp(tech: PanelTech): number {
+  const spec = PANEL_TECHNOLOGIES[tech];
+  return Math.round(spec.panelWp * spec.pricePerWpEgp);
+}
+
+export function getMaxPanelsForArea(
+  usableAreaM2: number,
+  tech: PanelTech,
+  packingFactor = 0.72
+): number {
+  const spec = PANEL_TECHNOLOGIES[tech];
+  return Math.max(1, Math.floor((usableAreaM2 * packingFactor) / spec.panelAreaM2));
 }

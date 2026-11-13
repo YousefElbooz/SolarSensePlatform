@@ -67,40 +67,40 @@ export default function ModelBenchmarkPage() {
 
         {/* Filter Bar */}
         <div className="glass mt-6 flex flex-wrap items-center justify-between gap-4 py-3.5 px-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-[#b9bdcf]">Forecast Horizon:</span>
-            {([1, 6, 24] as const).map((h) => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => setHorizonH(h)}
-                className={`rounded-full px-3.5 py-1.5 font-mono text-xs transition ${
-                  horizonH === h
-                    ? 'bg-[#f5a524] font-semibold text-[#221500]'
-                    : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf] hover:text-white'
-                }`}
-              >
-                {h}h Ahead
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="font-mono text-xs text-[#b4b8cb]">Forecast Horizon:</span>
+            <div className="apple-segmented" role="group" aria-label="Forecast Horizon">
+              {([1, 6, 24] as const).map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setHorizonH(h)}
+                  className={`apple-segment-btn font-mono text-xs ${
+                    horizonH === h ? 'active' : ''
+                  }`}
+                >
+                  {h}h Ahead
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-[#b9bdcf]">Sky Condition Stratum:</span>
-            {strataOptions.map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setStratum(st)}
-                className={`rounded-full px-3.5 py-1.5 font-mono text-xs transition ${
-                  activeStratum === st
-                    ? 'bg-[#3fc1c1] font-semibold text-[#05070f]'
-                    : 'border border-white/[0.16] bg-white/[0.04] text-[#b9bdcf] hover:text-white'
-                }`}
-              >
-                {stratumLabel(st)}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="font-mono text-xs text-[#b4b8cb]">Sky Condition Stratum:</span>
+            <div className="apple-segmented flex-wrap" role="group" aria-label="Sky Condition Stratum">
+              {strataOptions.map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStratum(st)}
+                  className={`apple-segment-btn font-mono text-xs ${
+                    activeStratum === st ? 'active' : ''
+                  }`}
+                >
+                  {stratumLabel(st)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
