@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizePanelTech } from '@/domain/panels';
-import { predictionProvider } from '@/domain/providers/predictionProvider';
+import {
+  predictionProvider,
+  resolveForecastWithPythonServer,
+} from '@/domain/providers/predictionProvider';
 import { snapToGridCell } from '@/domain/regions';
 import { SkyCondition } from '@/domain/types';
 
@@ -15,6 +18,9 @@ export async function GET(req: NextRequest) {
   const horizonH: 1 | 6 | 24 = horizonRaw === 6 ? 6 : horizonRaw === 24 ? 24 : 1;
   const mode = searchParams.get('mode') === 'live' ? 'live' : 'replay';
   const sky = (searchParams.get('sky') as SkyCondition) || 'clear';
+  const modelParam = searchParams.get('model');
+  const modelKey: 'xgb' | 'lstm' | 'pgnn' =
+    modelParam === 'xgb' || modelParam === 'lstm' ? modelParam : 'pgnn';
 
   const site = snapToGridCell(lat, lon);
   const system = {
@@ -25,12 +31,13 @@ export async function GET(req: NextRequest) {
     azimuthDeg: 180,
   };
 
-  const forecast = predictionProvider.forecast({
+  const forecast = await resolveForecastWithPythonServer({
     site,
     system,
     horizonH,
     mode,
     skyCondition: sky,
+    modelKey,
   });
   const yieldResult = predictionProvider.yield(site, system);
 

@@ -199,3 +199,70 @@ export class PhysicsAtlasPredictionProvider implements PredictionProvider {
 
 export const predictionProvider = new PhysicsAtlasPredictionProvider();
 
+/**
+ * Calls the external Python FastAPI ML Server (pvlib + XGBoost / LSTM / PGNN)
+ * when `PYTHON_ML_SERVICE_URL` is configured, falling back to `PhysicsAtlasPredictionProvider`
+ * if the environment variable is unset or the Python service is unreachable.
+ */
+export async function resolveForecastWithPythonServer(params: {
+  site: SitePoint;
+  system: SystemSpec;
+  horizonH?: 1 | 6 | 24;
+  mode?: 'replay' | 'live';
+  skyCondition?: SkyCondition;
+  dayOfYear?: number;
+  modelKey?: 'xgb' | 'lstm' | 'pgnn';
+}): Promise<ForecastResult> {
+  const baseUrl = process.env.PYTHON_ML_SERVICE_URL?.replace(/\/+$/, '');
+  if (!baseUrl) {
+    return predictionProvider.forecast(params);
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (process.env.PYTHON_ML_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.PYTHON_ML_API_KEY}`;
+    }
+
+    const res = await fetch(`${baseUrl}/v1/predict`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        site: {
+          cellId: params.site.cellId,
+          cellLat: params.site.cellLat,
+          cellLon: params.site.cellLon,
+          region: params.site.region,
+        },
+        system: params.system,
+        horizonH: params.horizonH ?? 1,
+        mode: params.mode ?? 'replay',
+        skyCondition: params.skyCondition ?? 'clear',
+        dayOfYear: params.dayOfYear ?? 135,
+        modelKey: params.modelKey ?? 'pgnn',
+      }),
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      throw new Error(`Python ML Server HTTP ${res.status}`);
+    }
+
+    const payload = (await res.json()) as ForecastResult;
+    return {
+      ...payload,
+      source: 'model',
+    };
+  } catch {
+    // Graceful degradation (Handover Principle 6): fallback to deterministic physics + ERA5 atlas
+    return predictionProvider.forecast(params);
+  }
+}
+
+
