@@ -344,6 +344,8 @@ export default function PlanDayArcPage() {
     }
 
     let prevActiveIdx = -1;
+    let lastScrollY = -9999;
+    let lastClockStr = '';
 
     const scrubVideo = (ch: ChapterDef, progress: number) => {
       const v = videoRefs.current[ch.clip];
@@ -359,6 +361,12 @@ export default function PlanDayArcPage() {
       if (lenis) {
         lenis.raf(timeSeconds * 1000);
       }
+
+      const curScrollY = window.scrollY;
+      if (Math.abs(curScrollY - lastScrollY) < 0.05 && prevActiveIdx !== -1) {
+        return;
+      }
+      lastScrollY = curScrollY;
 
       const vh = window.innerHeight || 800;
       const mid = vh / 2;
@@ -400,7 +408,14 @@ export default function PlanDayArcPage() {
 
       const progress = rect ? clamp((mid - rect.top) / Math.max(1, rect.height), 0, 1) : 0;
       const clockTime = ch.t0 + (ch.t1 - ch.t0) * progress;
-      setClockLabel(`${formatHhMm(clockTime)} · ${isAr ? ch.nameAr : ch.nameEn}`);
+      const nextClockStr = `${formatHhMm(clockTime)} · ${isAr ? ch.nameAr : ch.nameEn}`;
+      if (nextClockStr !== lastClockStr) {
+        lastClockStr = nextClockStr;
+        const clockEl = document.getElementById('clock');
+        if (clockEl) {
+          clockEl.textContent = nextClockStr;
+        }
+      }
 
       // Film backdrop cross-fade tied to scroll position
       const nextRect = rects[currentIdx + 1];
