@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --night: #05070f;
+  --amber: #f5a524;
+  --sun: #ffd166;
+  --teal: #3fc1c1;
+  --ink: #f4f5fa;
+  --muted: #b9bdcf;
+}
+
+/* Hide scrollbars globally while keeping full scroll functionality */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+/* Hide Next.js floating dev indicator / N logo badge */
+nextjs-portal,
+#__next-build-watcher,
+[data-nextjs-toast],
+[data-nextjs-dev-tools-button],
+[data-next-badge-root],
+[data-next-mark] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body {
+  background-color: var(--night);
+  color: var(--ink);
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, .font-serif {
+  font-family: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+}
+
+@media print {
+  header, .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+}

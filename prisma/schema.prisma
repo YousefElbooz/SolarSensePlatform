@@ -1,0 +1,427 @@
+// SolarSense Platform v1.0 Database Schema (PostgreSQL + TimescaleDB)
+// Covers both Operate (Handover §7.4) and Plan (Platform Context §9)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  operator
+  viewer
+}
+
+enum WeatherSource {
+  era5
+  openmeteo_ifs
+  sensor
+}
+
+enum PvPowerSource {
+  pvlib_sim
+  measured
+}
+
+enum ModelAlgo {
+  persistence
+  smart_persistence
+  cliper
+  xgb
+  lstm
+  pgnn
+}
+
+enum ForecastMode {
+  replay
+  live
+}
+
+enum EvalMask {
+  daylight
+  all
+}
+
+enum PriceKind {
+  panel
+  inverter
+  mounting
+  installation
+  battery
+  other
+}
+
+enum PriceUnit {
+  per_wp
+  per_kwh
+  per_panel
+  fixed
+}
+
+enum TariffSector {
+  residential
+  commercial
+  agricultural
+}
+
+enum BindingLimit {
+  area
+  budget
+  demand
+}
+
+enum YieldSource {
+  mock
+  pvlib
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  role         UserRole      @default(operator)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  assessments  Assessment[]
+  chatSessions ChatSession[]
+
+  @@map("users")
+}
+
+model Region {
+  id          String       @id @default(uuid())
+  key         String       @unique // 'north-coast-delta' | 'western-desert' | 'sinai-red-sea' | 'nile-valley-upper-egypt'
+  nameEn      String       @map("name_en")
+  nameAr      String       @map("name_ar")
+  description String
+  color       String
+  polygon     Json         // GeoJSON polygon
+  gridCells   GridCell[]
+  assessments Assessment[]
+
+  @@map("regions")
+}
+
+model GridCell {
+  id               String            @id // e.g., "30.00_31.25"
+  lat              Float
+  lon              Float
+  regionId         String            @map("region_id")
+  elevationM       Float             @default(50) @map("elevation_m")
+  isAnchor         Boolean           @default(false) @map("is_anchor")
+  anchorName       String?           @map("anchor_name")
+  region           Region            @relation(fields: [regionId], references: [id])
+  yieldAtlas       YieldAtlas[]
+  assessments      Assessment[]
+  weatherSnapshots WeatherSnapshot[]
+
+  @@index([lat, lon])
+  @@map("grid_cells")
+}
+
+model PanelTechnology {
+  id                     String       @id @default(uuid())
+  key                    String       @unique // 'pc-Si' | 'a-Si:H/sc-Si' | 'CIGS'
+  name                   String
+  efficiencyPct          Float        @map("efficiency_pct")
+  tempCoeffPctPerC       Float        @map("temp_coeff_pct_per_c")
+  degradationPctPerYear  Float        @map("degradation_pct_per_year")
+  panelWp                Float        @map("panel_wp")
+  panelAreaM2            Float        @map("panel_area_m2")
+  noctC                  Float        @map("noct_c")
+  description            String
+  priceItems             PriceItem[]
+  yieldAtlas             YieldAtlas[]
+  assessments            Assessment[]
+
+  @@map("panel_technologies")
+}
+
+model PriceItem {
+  id         String           @id @default(uuid())
+  kind       PriceKind
+  techId     String?          @map("tech_id")
+  unit       PriceUnit
+  amountEgp  Float            @map("amount_egp")
+  source     String
+  validFrom  DateTime         @map("valid_from")
+  validTo    DateTime?        @map("valid_to")
+  technology PanelTechnology? @relation(fields: [techId], references: [id])
+
+  @@map("price_items")
+}
+
+model Tariff {
+  id             String       @id @default(uuid())
+  sector         TariffSector
+  tierFromKwh    Float        @map("tier_from_kwh")
+  tierToKwh      Float?       @map("tier_to_kwh")
+  priceEgpPerKwh Float        @map("price_egp_per_kwh")
+  source         String
+  validFrom      DateTime     @map("valid_from")
+
+  @@map("tariffs")
+}
+
+model Assumption {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Float
+  unit      String
+  source    String
+  validFrom DateTime @map("valid_from")
+
+  @@map("assumptions")
+}
+
+model YieldAtlas {
+  cellId           String          @map("cell_id")
+  techId           String          @map("tech_id")
+  month            Int             // 1..12
+  kwhPerKwp        Float           @map("kwh_per_kwp")
+  pClearKwhPerKwp  Float           @map("p_clear_kwh_per_kwp")
+  source           YieldSource     @default(mock)
+  cell             GridCell        @relation(fields: [cellId], references: [id])
+  technology       PanelTechnology @relation(fields: [techId], references: [id])
+
+  @@id([cellId, techId, month])
+  @@map("yield_atlas")
+}
+
+model Assessment {
+  id           String            @id @default(uuid())
+  userId       String?           @map("user_id")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  lat          Float
+  lon          Float
+  cellId       String            @map("cell_id")
+  regionId     String            @map("region_id")
+  techId       String            @map("tech_id")
+  usableAreaM2 Float             @map("usable_area_m2")
+  budgetEgp    Float             @map("budget_egp")
+  monthlyKwh   Float             @map("monthly_kwh")
+  daytimeShare Float             @map("daytime_share")
+  inputs       Json
+  user         User?             @relation(fields: [userId], references: [id])
+  cell         GridCell          @relation(fields: [cellId], references: [id])
+  region       Region            @relation(fields: [regionId], references: [id])
+  technology   PanelTechnology   @relation(fields: [techId], references: [id])
+  result       AssessmentResult?
+
+  @@map("assessments")
+}
+
+model AssessmentResult {
+  assessmentId       String       @id @map("assessment_id")
+  panelCount         Int          @map("panel_count")
+  kwp                Float
+  bindingLimit       BindingLimit @map("binding_limit")
+  capexEgp           Float        @map("capex_egp")
+  annualKwh          Float        @map("annual_kwh")
+  annualSavingEgp    Float        @map("annual_saving_egp")
+  paybackYears       Float        @map("payback_years")
+  npvEgp             Float        @map("npv_egp")
+  co2KgYear          Float        @map("co2_kg_year")
+  comparison         Json
+  enhancers          Json
+  assumptionsVersion String       @map("assumptions_version")
+  predictionSource   String       @map("prediction_source")
+  assessment         Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@map("assessment_results")
+}
+
+model WeatherSnapshot {
+  id        String   @id @default(uuid())
+  cellId    String   @map("cell_id")
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+  provider  String
+  payload   Json
+  cell      GridCell @relation(fields: [cellId], references: [id])
+
+  @@index([cellId, fetchedAt])
+  @@map("weather_snapshots")
+}
+
+// ---------------- OPERATE MODULE TABLES (Handover §7.4) ----------------
+
+model Site {
+  id              String           @id @default(uuid())
+  name            String
+  lat             Float
+  lon             Float
+  elevationM      Float            @default(50) @map("elevation_m")
+  timezone        String           @default("Africa/Cairo")
+  climateZone     String           @map("climate_zone")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  pvSystems       PvSystem[]
+  weatherObs      WeatherObs[]
+  pvPowers        PvPower[]
+  models          Model[]
+  forecasts       Forecast[]
+  flexibleLoads   FlexibleLoad[]
+  recommendations Recommendation[]
+  chatSessions    ChatSession[]
+
+  @@map("sites")
+}
+
+model PvSystem {
+  id             String  @id @default(uuid())
+  siteId         String  @map("site_id")
+  capacityKwp    Float   @map("capacity_kwp")
+  tiltDeg        Float   @map("tilt_deg")
+  azimuthDeg     Float   @map("azimuth_deg")
+  moduleParams   Json    @map("module_params")
+  inverterParams Json    @map("inverter_params")
+  lossesPct      Float   @map("losses_pct")
+  tempModel      String  @map("temp_model")
+  isReference    Boolean @default(true) @map("is_reference")
+  site           Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("pv_systems")
+}
+
+// TimescaleDB Hypertable partitioned by ts_utc
+model WeatherObs {
+  siteId   String        @map("site_id")
+  tsUtc    DateTime      @map("ts_utc")
+  source   WeatherSource
+  ghi      Float
+  dni      Float
+  dhi      Float
+  ghiClear Float         @map("ghi_clear")
+  t2mC     Float         @map("t2m_c")
+  ws10     Float
+  tcc      Float
+  spHpa    Float         @map("sp_hpa")
+  tcwv     Float
+  qcFlags  Int           @default(0) @map("qc_flags")
+  site     Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, tsUtc, source])
+  @@map("weather_obs")
+}
+
+// TimescaleDB Hypertable partitioned by ts_utc
+model PvPower {
+  siteId   String        @map("site_id")
+  tsUtc    DateTime      @map("ts_utc")
+  source   PvPowerSource
+  pAcKw    Float         @map("p_ac_kw")
+  pClearKw Float         @map("p_clear_kw")
+  kc       Float         @map("k_c")
+  site     Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, tsUtc, source])
+  @@map("pv_power")
+}
+
+model Model {
+  id          String       @id @default(uuid())
+  name        String
+  algo        ModelAlgo
+  horizonH    Int          @map("horizon_h")
+  siteId      String?      @map("site_id")
+  version     String
+  mlflowRunId String?      @map("mlflow_run_id")
+  trainPeriod String       @map("train_period")
+  status      String       @default("Production")
+  site        Site?        @relation(fields: [siteId], references: [id])
+  forecasts   Forecast[]
+  evaluations Evaluation[]
+
+  @@map("models")
+}
+
+// TimescaleDB Hypertable partitioned by target_time
+model Forecast {
+  siteId     String       @map("site_id")
+  modelId    String       @map("model_id")
+  issueTime  DateTime     @map("issue_time")
+  targetTime DateTime     @map("target_time")
+  horizonH   Int          @map("horizon_h")
+  pHatKw     Float        @map("p_hat_kw")
+  p10Kw      Float        @map("p10_kw")
+  p90Kw      Float        @map("p90_kw")
+  mode       ForecastMode @default(replay)
+  site       Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  model      Model        @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, modelId, issueTime, targetTime])
+  @@map("forecasts")
+}
+
+model Evaluation {
+  id      String   @id @default(uuid())
+  modelId String   @map("model_id")
+  split   String   // 'val_2025' | 'test_2026'
+  mask    EvalMask @default(daylight)
+  stratum String   // 'overall' | 'clear' | 'dust' | 'R1' ...
+  metric  String   // 'MAE' | 'RMSE' | 'nRMSE' | 'MBE' | 'R2' | 'Skill'
+  value   Float
+  model   Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@map("evaluations")
+}
+
+model FlexibleLoad {
+  id              String           @id @default(uuid())
+  siteId          String           @map("site_id")
+  name            String
+  powerKw         Float            @map("power_kw")
+  durationH       Float            @map("duration_h")
+  earliest        String           // e.g., "07:00"
+  deadline        String           // e.g., "17:00"
+  priority        Int              @default(1)
+  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  recommendations Recommendation[]
+
+  @@map("flexible_loads")
+}
+
+model Recommendation {
+  id               String       @id @default(uuid())
+  siteId           String       @map("site_id")
+  loadId           String       @map("load_id")
+  issueTime        DateTime     @map("issue_time")
+  windowStart      DateTime     @map("window_start")
+  windowEnd        DateTime     @map("window_end")
+  expectedSolarKwh Float        @map("expected_solar_kwh")
+  riskLevel        String       @map("risk_level") // 'low' | 'medium' | 'high'
+  rationale        String
+  acceptedBy       String?      @map("accepted_by")
+  acceptedAt       DateTime?    @map("accepted_at")
+  site             Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  load             FlexibleLoad @relation(fields: [loadId], references: [id], onDelete: Cascade)
+
+  @@map("recommendations")
+}
+
+model ChatSession {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  siteId    String        @map("site_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site      Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String      @map("session_id")
+  role      String      // 'user' | 'assistant'
+  content   String
+  toolCalls Json?       @map("tool_calls")
+  createdAt DateTime    @default(now()) @map("created_at")
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
