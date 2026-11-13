@@ -17,13 +17,20 @@ function seeded(seed: number) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
+let cachedPoly: HTMLCanvasElement | null = null;
+let cachedHjt: HTMLCanvasElement | null = null;
+let cachedCigs: HTMLCanvasElement | null = null;
+let cachedSky: HTMLCanvasElement | null = null;
+let cachedConcrete: HTMLCanvasElement | null = null;
+
 function polyTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(900, 1500);
+  if (cachedPoly) return cachedPoly;
+  const [c, g] = makeCanvas(540, 900);
   const rnd = seeded(7);
   const cols = 6;
   const rows = 10;
-  const m = 22;
-  const gap = 5;
+  const m = 14;
+  const gap = 3;
   const cw = (c.width - 2 * m - (cols - 1) * gap) / cols;
   const ch = (c.height - 2 * m - (rows - 1) * gap) / rows;
   g.fillStyle = '#c9ced6';
@@ -38,10 +45,10 @@ function polyTexture(): HTMLCanvasElement {
       g.clip();
       g.fillStyle = '#16327a';
       g.fillRect(x, y, cw, ch);
-      for (let k = 0; k < 46; k++) {
+      for (let k = 0; k < 24; k++) {
         const px = x + rnd() * cw;
         const py = y + rnd() * ch;
-        const r = 10 + rnd() * 34;
+        const r = 6 + rnd() * 20;
         g.fillStyle = `hsla(${214 + rnd() * 20},${55 + rnd() * 25}%,${14 + rnd() * 20}%,.6)`;
         g.beginPath();
         for (let a = 0, n = 3 + Math.floor(rnd() * 3); a < n; a++) {
@@ -64,21 +71,23 @@ function polyTexture(): HTMLCanvasElement {
       }
       g.fillStyle = '#aab2bd';
       for (let b = 1; b <= 3; b++) {
-        g.fillRect(x + (cw * b) / 4 - 2, y, 4, ch);
+        g.fillRect(x + (cw * b) / 4 - 1.2, y, 2.4, ch);
       }
       g.restore();
     }
   }
+  cachedPoly = c;
   return c;
 }
 
 function hjtTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(900, 1520);
+  if (cachedHjt) return cachedHjt;
+  const [c, g] = makeCanvas(540, 912);
   const cols = 6;
   const rows = 10;
-  const m = 24;
-  const gap = 5;
-  const cut = 16;
+  const m = 14;
+  const gap = 3;
+  const cut = 10;
   const cw = (c.width - 2 * m - (cols - 1) * gap) / cols;
   const ch = (c.height - 2 * m - (rows - 1) * gap) / rows;
   g.fillStyle = '#15171c';
@@ -106,7 +115,7 @@ function hjtTexture(): HTMLCanvasElement {
       g.fillRect(x, y, cw, ch);
       g.strokeStyle = 'rgba(150,170,205,.07)';
       g.lineWidth = 1;
-      for (let fy = y + 2; fy < y + ch; fy += 4) {
+      for (let fy = y + 2; fy < y + ch; fy += 5) {
         g.beginPath();
         g.moveTo(x, fy);
         g.lineTo(x + cw, fy);
@@ -114,16 +123,18 @@ function hjtTexture(): HTMLCanvasElement {
       }
       g.fillStyle = 'rgba(185,198,220,.50)';
       for (let b = 1; b <= 9; b++) {
-        g.fillRect(x + (cw * b) / 10 - 0.8, y, 1.6, ch);
+        g.fillRect(x + (cw * b) / 10 - 0.6, y, 1.2, ch);
       }
       g.restore();
     }
   }
+  cachedHjt = c;
   return c;
 }
 
 function cigsTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(900, 1160);
+  if (cachedCigs) return cachedCigs;
+  const [c, g] = makeCanvas(540, 700);
   const grad = g.createLinearGradient(0, 0, c.width, c.height);
   grad.addColorStop(0, '#0e1014');
   grad.addColorStop(0.5, '#08090c');
@@ -131,17 +142,19 @@ function cigsTexture(): HTMLCanvasElement {
   g.fillStyle = grad;
   g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = 'rgba(255,255,255,.055)';
-  for (let x = 14; x < c.width - 14; x += 7) {
-    g.fillRect(x, 14, 1, c.height - 28);
+  for (let x = 10; x < c.width - 10; x += 5) {
+    g.fillRect(x, 10, 1, c.height - 20);
   }
   g.strokeStyle = 'rgba(160,170,190,.30)';
-  g.lineWidth = 3;
-  g.strokeRect(12, 12, c.width - 24, c.height - 24);
+  g.lineWidth = 2;
+  g.strokeRect(8, 8, c.width - 16, c.height - 16);
+  cachedCigs = c;
   return c;
 }
 
 function skyTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(1024, 512);
+  if (cachedSky) return cachedSky;
+  const [c, g] = makeCanvas(512, 256);
   const sky = g.createLinearGradient(0, 0, 0, c.height);
   sky.addColorStop(0, '#2b6cb8');
   sky.addColorStop(0.46, '#cfe2f1');
@@ -149,29 +162,31 @@ function skyTexture(): HTMLCanvasElement {
   sky.addColorStop(1, '#6d5433');
   g.fillStyle = sky;
   g.fillRect(0, 0, c.width, c.height);
-  const sun = g.createRadialGradient(330, 130, 0, 330, 130, 90);
+  const sun = g.createRadialGradient(165, 65, 0, 165, 65, 45);
   sun.addColorStop(0, 'rgba(255,255,255,1)');
   sun.addColorStop(0.25, 'rgba(255,244,214,.9)');
   sun.addColorStop(1, 'rgba(255,230,170,0)');
   g.fillStyle = sun;
   g.fillRect(0, 0, c.width, c.height);
+  cachedSky = c;
   return c;
 }
 
 function concreteTexture(): HTMLCanvasElement {
-  const [c, g] = makeCanvas(512, 512);
+  if (cachedConcrete) return cachedConcrete;
+  const [c, g] = makeCanvas(256, 256);
   const rnd = seeded(31);
   g.fillStyle = '#b9ad9a';
-  g.fillRect(0, 0, 512, 512);
-  for (let k = 0; k < 5200; k++) {
+  g.fillRect(0, 0, 256, 256);
+  for (let k = 0; k < 1400; k++) {
     const v = 150 + rnd() * 70;
     g.fillStyle = `rgba(${v},${v - 8},${v - 22},${0.1 + rnd() * 0.16})`;
-    g.fillRect(rnd() * 512, rnd() * 512, 1 + rnd() * 2.4, 1 + rnd() * 2.4);
+    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 1 + rnd() * 2);
   }
-  for (let k = 0; k < 16; k++) {
-    const x = rnd() * 512;
-    const y = rnd() * 512;
-    const r = 30 + rnd() * 80;
+  for (let k = 0; k < 10; k++) {
+    const x = rnd() * 256;
+    const y = rnd() * 256;
+    const r = 15 + rnd() * 40;
     const st = g.createRadialGradient(x, y, 0, x, y, r);
     st.addColorStop(0, `rgba(${rnd() < 0.5 ? '96,84,68' : '214,205,190'},.16)`);
     st.addColorStop(1, 'rgba(0,0,0,0)');
@@ -179,17 +194,18 @@ function concreteTexture(): HTMLCanvasElement {
     g.fillRect(x - r, y - r, 2 * r, 2 * r);
   }
   g.strokeStyle = 'rgba(80,70,58,.20)';
-  g.lineWidth = 1.5;
-  for (let q = 0; q <= 512; q += 256) {
+  g.lineWidth = 1;
+  for (let q = 0; q <= 256; q += 128) {
     g.beginPath();
     g.moveTo(q, 0);
-    g.lineTo(q, 512);
+    g.lineTo(q, 256);
     g.stroke();
     g.beginPath();
     g.moveTo(0, q);
-    g.lineTo(512, q);
+    g.lineTo(256, q);
     g.stroke();
   }
+  cachedConcrete = c;
   return c;
 }
 
@@ -569,7 +585,7 @@ export function RooftopThreeViewer({
 
     const sun = new THREE.DirectionalLight(0xfff0d2, 2.4);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
     scene.add(sun, sun.target, new THREE.HemisphereLight(0xcfe2ff, 0x8a7350, 0.35));

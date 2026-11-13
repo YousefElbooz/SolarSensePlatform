@@ -99,49 +99,54 @@ function resolveCalloutCollisions(
   return out;
 }
 
+let cachedTwinCellCanvas: HTMLCanvasElement | null = null;
+
 function makeSolarCellTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 768;
-  const g = c.getContext('2d')!;
+  if (!cachedTwinCellCanvas) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 384;
+    const g = c.getContext('2d')!;
 
-  g.fillStyle = '#0c1d3e';
-  g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#0c1d3e';
+    g.fillRect(0, 0, c.width, c.height);
 
-  const cols = 6;
-  const rows = 10;
-  const pad = 10;
-  const cw = (c.width - pad * 2) / cols;
-  const ch = (c.height - pad * 2) / rows;
+    const cols = 6;
+    const rows = 10;
+    const pad = 6;
+    const cw = (c.width - pad * 2) / cols;
+    const ch = (c.height - pad * 2) / rows;
 
-  for (let r = 0; r < rows; r++) {
-    for (let col = 0; col < cols; col++) {
-      const x = pad + col * cw + 2;
-      const y = pad + r * ch + 2;
-      const w = cw - 4;
-      const h = ch - 4;
+    for (let r = 0; r < rows; r++) {
+      for (let col = 0; col < cols; col++) {
+        const x = pad + col * cw + 1.5;
+        const y = pad + r * ch + 1.5;
+        const w = cw - 3;
+        const h = ch - 3;
 
-      const grad = g.createLinearGradient(x, y, x + w, y + h);
-      grad.addColorStop(0, '#16356c');
-      grad.addColorStop(0.5, '#1d468a');
-      grad.addColorStop(1, '#0f2752');
-      g.fillStyle = grad;
-      g.fillRect(x, y, w, h);
+        const grad = g.createLinearGradient(x, y, x + w, y + h);
+        grad.addColorStop(0, '#16356c');
+        grad.addColorStop(0.5, '#1d468a');
+        grad.addColorStop(1, '#0f2752');
+        g.fillStyle = grad;
+        g.fillRect(x, y, w, h);
 
-      // Busbars
-      g.fillStyle = 'rgba(220, 232, 250, 0.55)';
-      for (let b = 1; b <= 3; b++) {
-        g.fillRect(x + (w * b) / 4 - 0.8, y, 1.6, h);
-      }
-      // Fine fingers
-      g.fillStyle = 'rgba(200, 220, 255, 0.16)';
-      for (let f = 1; f < 10; f++) {
-        g.fillRect(x, y + (h * f) / 10, w, 0.7);
+        // Busbars
+        g.fillStyle = 'rgba(220, 232, 250, 0.55)';
+        for (let b = 1; b <= 3; b++) {
+          g.fillRect(x + (w * b) / 4 - 0.5, y, 1.0, h);
+        }
+        // Fine fingers
+        g.fillStyle = 'rgba(200, 220, 255, 0.16)';
+        for (let f = 1; f < 8; f++) {
+          g.fillRect(x, y + (h * f) / 8, w, 0.5);
+        }
       }
     }
+    cachedTwinCellCanvas = c;
   }
 
-  const tex = new THREE.CanvasTexture(c);
+  const tex = new THREE.CanvasTexture(cachedTwinCellCanvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return tex;
@@ -167,14 +172,10 @@ function DigitalTwinContent() {
   const [showEquationsHud, setShowEquationsHud] = useState<boolean>(true);
   const [selectedNode, setSelectedNode] = useState<TwinNodeId>('array');
 
-  const [callouts, setCallouts] = useState<Record<TwinNodeId, ProjectedCallout>>({
-    sun: { id: 'sun', anchorX: 0, anchorY: 0, cardX: 0, cardY: 0, visible: false },
-    array: { id: 'array', anchorX: 0, anchorY: 0, cardX: 0, cardY: 0, visible: false },
-    inverter: { id: 'inverter', anchorX: 0, anchorY: 0, cardX: 0, cardY: 0, visible: false },
-    battery: { id: 'battery', anchorX: 0, anchorY: 0, cardX: 0, cardY: 0, visible: false },
-    load: { id: 'load', anchorX: 0, anchorY: 0, cardX: 0, cardY: 0, visible: false },
-    grid: { id: 'grid', anchorX: 0, anchorY: 0, cardX: 0, cardY: 0, visible: false },
-  });
+  const calloutCardRefs = useRef<Partial<Record<TwinNodeId, HTMLButtonElement | null>>>({});
+  const leaderGroupRefs = useRef<Partial<Record<TwinNodeId, SVGGElement | null>>>({});
+  const leaderLineRefs = useRef<Partial<Record<TwinNodeId, SVGLineElement | null>>>({});
+  const leaderCircleRefs = useRef<Partial<Record<TwinNodeId, SVGCircleElement | null>>>({});
 
   const city = useMemo(
     () => ANCHOR_CITIES.find((c) => c.id === cityId) || ANCHOR_CITIES[0],
@@ -345,7 +346,7 @@ function DigitalTwinContent() {
 
     const sunLight = new THREE.DirectionalLight(0xfff3d1, 2.6);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.mapSize.set(1024, 1024);
     Object.assign(sunLight.shadow.camera, {
       left: -16,
       right: 16,
@@ -800,7 +801,24 @@ function DigitalTwinContent() {
     let lastTilt = -1;
     let lastArcKey = '';
     let rafId = 0;
-    let lastCalloutSync = 0;
+    let lastCamKey = '';
+
+    const staticAnchors: Record<Exclude<TwinNodeId, 'sun'>, THREE.Vector3> = {
+      array: new THREE.Vector3(0, 1.0, 1.4),
+      inverter: new THREE.Vector3(-7.4, 1.85, -4.6),
+      battery: new THREE.Vector3(-2.5, 2.15, -4.9),
+      load: new THREE.Vector3(2.5, 2.25, -4.9),
+      grid: new THREE.Vector3(7.4, 2.85, -4.6),
+    };
+    const initialOffsetY: Record<TwinNodeId, number> = {
+      sun: -18,
+      array: -16,
+      inverter: -52,
+      battery: -12,
+      load: -58,
+      grid: -14,
+    };
+    const projVec = new THREE.Vector3();
 
     const animate = (now: number) => {
       rafId = requestAnimationFrame(animate);
@@ -958,37 +976,22 @@ function DigitalTwinContent() {
       camera.lookAt(curLookAt);
       renderer.render(scene, camera);
 
-      // Project 3D Model Anchors to de-overlapped 2D Floating Equation Callouts
-      if (now - lastCalloutSync > 45) {
-        lastCalloutSync = now;
-        const w = host.clientWidth;
-        const h = host.clientHeight;
-        if (w > 0 && h > 0) {
-          const anchors: Record<TwinNodeId, THREE.Vector3> = {
-            sun: orbPos.clone(),
-            array: new THREE.Vector3(0, 1.0, 1.4),
-            inverter: new THREE.Vector3(-7.4, 1.85, -4.6),
-            battery: new THREE.Vector3(-2.5, 2.15, -4.9),
-            load: new THREE.Vector3(2.5, 2.25, -4.9),
-            grid: new THREE.Vector3(7.4, 2.85, -4.6),
-          };
-
-          // Stagger initial vertical offsets so rear components sit in clean tiers
-          const initialOffsetY: Record<TwinNodeId, number> = {
-            sun: -18,
-            array: -16,
-            inverter: -52,
-            battery: -12,
-            load: -58,
-            grid: -14,
-          };
-
+      // Project 3D Model Anchors to de-overlapped 2D Floating Equation Callouts directly via DOM refs (0 React re-renders)
+      const w = host.clientWidth;
+      const h = host.clientHeight;
+      if (w > 0 && h > 0) {
+        const camKey = `${curYaw.toFixed(4)}|${curPitch.toFixed(4)}|${curDist.toFixed(3)}|${curLookAt.x.toFixed(2)}|${orbPos.x.toFixed(2)}|${orbPos.y.toFixed(2)}|${w}|${h}|${tel.solar.elevationDeg > 0 ? 1 : 0}`;
+        if (camKey !== lastCamKey) {
+          lastCamKey = camKey;
+          const nodeIds: TwinNodeId[] = ['sun', 'array', 'inverter', 'battery', 'load', 'grid'];
           const rawCallouts = {} as Record<TwinNodeId, ProjectedCallout>;
-          (Object.keys(anchors) as TwinNodeId[]).forEach((id) => {
-            const v = anchors[id].clone().project(camera);
-            const ax = (v.x * 0.5 + 0.5) * w;
-            const ay = (-v.y * 0.5 + 0.5) * h;
-            const inFront = v.z >= -1 && v.z <= 1;
+          for (let i = 0; i < nodeIds.length; i++) {
+            const id = nodeIds[i];
+            const src = id === 'sun' ? orbPos : staticAnchors[id];
+            projVec.copy(src).project(camera);
+            const ax = (projVec.x * 0.5 + 0.5) * w;
+            const ay = (-projVec.y * 0.5 + 0.5) * h;
+            const inFront = projVec.z >= -1 && projVec.z <= 1;
             const onScreen = ax >= -20 && ax <= w + 20 && ay >= -20 && ay <= h + 20;
             rawCallouts[id] = {
               id,
@@ -998,9 +1001,40 @@ function DigitalTwinContent() {
               cardY: Math.round(ay + initialOffsetY[id]),
               visible: inFront && onScreen && (id !== 'sun' || tel.solar.elevationDeg > 0),
             };
-          });
+          }
 
-          setCallouts(resolveCalloutCollisions(rawCallouts, w, h));
+          const resolved = resolveCalloutCollisions(rawCallouts, w, h);
+          for (let i = 0; i < nodeIds.length; i++) {
+            const id = nodeIds[i];
+            const pos = resolved[id];
+            const cardEl = calloutCardRefs.current[id];
+            const groupEl = leaderGroupRefs.current[id];
+            const lineEl = leaderLineRefs.current[id];
+            const circleEl = leaderCircleRefs.current[id];
+
+            if (cardEl) {
+              if (pos.visible) {
+                cardEl.style.display = 'block';
+                cardEl.style.left = `${pos.cardX}px`;
+                cardEl.style.top = `${pos.cardY}px`;
+              } else {
+                cardEl.style.display = 'none';
+              }
+            }
+            if (groupEl) {
+              groupEl.style.display = pos.visible ? '' : 'none';
+            }
+            if (lineEl && pos.visible) {
+              lineEl.setAttribute('x1', String(pos.anchorX));
+              lineEl.setAttribute('y1', String(pos.anchorY));
+              lineEl.setAttribute('x2', String(pos.cardX));
+              lineEl.setAttribute('y2', String(pos.cardY - 6));
+            }
+            if (circleEl && pos.visible) {
+              circleEl.setAttribute('cx', String(pos.anchorX));
+              circleEl.setAttribute('cy', String(pos.anchorY));
+            }
+          }
         }
       }
     };
@@ -1609,55 +1643,61 @@ function DigitalTwinContent() {
               />
 
               {/* SVG Leader Lines connecting de-overlapped equation cards to exact 3D model anchors */}
-              {showEquationsHud && (
-                <svg
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                  aria-hidden="true"
-                >
-                  {nodeBadges.map((b) => {
-                    const pos = callouts[b.id];
-                    if (!pos || !pos.visible) return null;
-                    const isSel = selectedNode === b.id;
-                    return (
-                      <g key={`leader-${b.id}`}>
-                        <line
-                          x1={pos.anchorX}
-                          y1={pos.anchorY}
-                          x2={pos.cardX}
-                          y2={pos.cardY - 6}
-                          stroke={isSel ? '#ffd166' : b.color}
-                          strokeWidth={isSel ? 1.8 : 1.2}
-                          strokeDasharray="3 3"
-                          strokeOpacity={isSel ? 0.95 : 0.65}
-                        />
-                        <circle
-                          cx={pos.anchorX}
-                          cy={pos.anchorY}
-                          r={3.5}
-                          fill={b.color}
-                          stroke="#05070f"
-                          strokeWidth={1.5}
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
-              )}
+              <svg
+                className={`pointer-events-none absolute inset-0 h-full w-full ${showEquationsHud ? '' : 'hidden'}`}
+                aria-hidden="true"
+              >
+                {nodeBadges.map((b) => {
+                  const isSel = selectedNode === b.id;
+                  return (
+                    <g
+                      key={`leader-${b.id}`}
+                      ref={(el) => {
+                        leaderGroupRefs.current[b.id] = el;
+                      }}
+                    >
+                      <line
+                        ref={(el) => {
+                          leaderLineRefs.current[b.id] = el;
+                        }}
+                        x1={0}
+                        y1={0}
+                        x2={0}
+                        y2={0}
+                        stroke={isSel ? '#ffd166' : b.color}
+                        strokeWidth={isSel ? 1.8 : 1.2}
+                        strokeDasharray="3 3"
+                        strokeOpacity={isSel ? 0.95 : 0.65}
+                      />
+                      <circle
+                        ref={(el) => {
+                          leaderCircleRefs.current[b.id] = el;
+                        }}
+                        cx={0}
+                        cy={0}
+                        r={3.5}
+                        fill={b.color}
+                        stroke="#05070f"
+                        strokeWidth={1.5}
+                      />
+                    </g>
+                  );
+                })}
+              </svg>
 
               {/* 3D-Projected Typeset Math Equation Cards (Never Clipping or Overlapping) */}
-              {showEquationsHud &&
-                nodeBadges.map((b) => {
-                  const pos = callouts[b.id];
-                  if (!pos || !pos.visible) return null;
+              <div className={showEquationsHud ? '' : 'hidden'}>
+                {nodeBadges.map((b) => {
                   const isSel = selectedNode === b.id;
                   return (
                     <button
                       key={b.id}
+                      ref={(el) => {
+                        calloutCardRefs.current[b.id] = el;
+                      }}
                       type="button"
                       onClick={() => focusCameraOnNode(b.id)}
                       style={{
-                        left: `${pos.cardX}px`,
-                        top: `${pos.cardY}px`,
                         borderColor: isSel ? '#ffd166' : b.borderColor,
                       }}
                       className={`group absolute z-10 w-max max-w-[270px] -translate-x-1/2 -translate-y-full cursor-pointer rounded-xl border bg-[#060916]/90 px-3 py-1.5 text-left backdrop-blur-md transition-shadow duration-200 ${
@@ -1685,6 +1725,7 @@ function DigitalTwinContent() {
                     </button>
                   );
                 })}
+              </div>
 
               {/* Bottom-left Interaction Hint */}
               <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-white/12 bg-[#05070f]/80 px-3.5 py-1 font-mono text-[11px] text-[#b9bdcf] backdrop-blur-md">

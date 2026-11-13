@@ -166,6 +166,7 @@ export function GlobeLocationModal({
   const openRef = useRef<boolean>(open);
   openRef.current = open;
 
+  const [hasOpened, setHasOpened] = useState<boolean>(open);
   const [stage, setStage] = useState<GlobeStage>('intro');
   const [isZooming, setIsZooming] = useState<boolean>(false);
   const [site, setSite] = useState<SitePoint>(() => snapToGridCell(initialLat, initialLon));
@@ -176,6 +177,12 @@ export function GlobeLocationModal({
   );
   const [pickMessage, setPickMessage] = useState<string>('');
   const [placedMessage, setPlacedMessage] = useState<string>('');
+
+  useEffect(() => {
+    if (open && !hasOpened) {
+      setHasOpened(true);
+    }
+  }, [open, hasOpened]);
 
   const showStage = useCallback((next: GlobeStage) => {
     stageRef.current = next;
@@ -385,9 +392,9 @@ export function GlobeLocationModal({
     place(pos.lat, pos.lon, { source: 'gps', acc: pos.acc, animate: true });
   }, [fly, isAr, place, showStage, startPick]);
 
-  // Mount MapLibre GL once in the background so opening the modal is 0ms instant
+  // Mount MapLibre GL once when first opened and keep alive for instant subsequent opens
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    if (!hasOpened || !mapContainerRef.current || mapRef.current) return;
 
     prewarmEgyptTiles();
 
@@ -603,7 +610,7 @@ export function GlobeLocationModal({
       map.remove();
       mapRef.current = null;
     };
-  }, [place]);
+  }, [hasOpened, place]);
 
   // Handle opening / closing & Escape key
   useEffect(() => {
