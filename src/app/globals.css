@@ -11,10 +11,14 @@
   --glass: rgba(10, 13, 28, 0.62);
   --glass-strong: rgba(10, 13, 28, 0.78);
   --line: rgba(255, 255, 255, 0.16);
-  --display: var(--font-display), "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --body: var(--font-sans), "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
-  --mono: var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --arabic: var(--font-arabic), "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-arabic: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --display: var(--font-display);
+  --body: var(--font-sans);
+  --mono: var(--font-mono);
+  --arabic: var(--font-arabic);
 }
 
 /* Hide scrollbars globally while keeping full scroll functionality */
