@@ -7,7 +7,12 @@ import {
   datasetVectorToFormVector,
   getDayOfYearFromDateStr,
 } from '../features';
-import { computeSolarPosition, simulatePvPowerStep } from '../physics';
+import {
+  computeRelativeHumidity,
+  computeSolarPosition,
+  deriveDniFromFdir,
+  simulatePvPowerStep,
+} from '../physics';
 import { SAVED_REGIONS } from '../regions.config';
 import { PointPredictionRequest, PointPredictionResponse } from '../types';
 
@@ -32,13 +37,24 @@ export function computePhysicsReferenceFrom23Features(req: PointPredictionReques
   const form = datasetVectorToFormVector(req.features);
   const warnings = checkCrossFieldWarnings(form);
 
-  // Mid-hour solar geometry (hourLocal - 0.5) matching ERA5 preceding-hour radiation accumulation
-  const solar = computeSolarPosition(lat, lon, hourLocal - 0.5, doy);
+  // Mid-hour solar geometry (hourLocal - 0.5) with pressure=sp (Pa) and temp=t2m (°C)
+  const solar = computeSolarPosition(lat, lon, hourLocal - 0.5, doy, {
+    pressurePa: req.features.sp,
+    tempC: form.t2m,
+  });
 
-  const ghiWm2 = Math.max(0, form.ssrd);
-  const fdirWm2 = Math.max(0, Math.min(ghiWm2, form.fdir));
+  // ssrd: Divide by 3600 (J/m² to W/m²)
+  const ghiWm2 = Math.max(0, req.features.ssrd / 3600);
+  const fdirWm2 = Math.max(0, Math.min(ghiWm2, req.features.fdir / 3600));
   const dhiWm2 = Math.max(0, ghiWm2 - fdirWm2);
-  const ghiClearWm2 = Math.max(ghiWm2, form.ssrdc);
+  const ghiClearWm2 = Math.max(ghiWm2, req.features.ssrdc / 3600);
+
+  // Derive forecast albedo (fal, 0-1) from net/downward surface solar radiation if consistent, else regional fal
+  const derivedFal =
+    req.features.ssrd > 36000 && req.features.ssr > 0 && req.features.ssr <= req.features.ssrd
+      ? 1 - req.features.ssr / req.features.ssrd
+      : regionInfo.albedo;
+  const fal = Math.max(0.05, Math.min(0.6, derivedFal));
 
   const DEG2RAD = Math.PI / 180;
   const tiltDeg = Math.round(lat * 0.9);
@@ -48,8 +64,8 @@ export function computePhysicsReferenceFrom23Features(req: PointPredictionReques
   let poaClearWm2 = 0;
 
   if (solar.elevationDeg > 0 && ghiWm2 > 0) {
-    const sinElev = Math.max(0.08, Math.sin(solar.elevationDeg * DEG2RAD));
-    const dniWm2 = fdirWm2 / sinElev;
+    // fdir -> DNI: DNI = (fdir / 3600) / cos(zenith)
+    const dniWm2 = deriveDniFromFdir(req.features.fdir, solar.zenithDeg, true);
     const zenithRad = solar.zenithDeg * DEG2RAD;
     const tiltRad = tiltDeg * DEG2RAD;
     const azDiffRad = (solar.azimuthDeg - panelAzimuthDeg) * DEG2RAD;
@@ -62,16 +78,26 @@ export function computePhysicsReferenceFrom23Features(req: PointPredictionReques
     const skyViewFactor = (1 + Math.cos(tiltRad)) / 2;
     const groundViewFactor = (1 - Math.cos(tiltRad)) / 2;
     const diffusePoa = dhiWm2 * skyViewFactor;
-    const groundReflectedPoa = ghiWm2 * regionInfo.albedo * groundViewFactor;
+    const groundReflectedPoa = ghiWm2 * fal * groundViewFactor;
 
     poaWm2 = Math.max(0, beamPoa + diffusePoa + groundReflectedPoa);
     const clearRatio = ghiWm2 > 5 ? ghiClearWm2 / ghiWm2 : 1;
     poaClearWm2 = Math.max(poaWm2, poaWm2 * clearRatio);
   }
 
-  const windSpeedMs = Math.hypot(form.u10, form.v10);
+  // Wind = sqrt(u10² + v10²) (m/s)
+  const windSpeedMs = Math.sqrt(req.features.u10 ** 2 + req.features.v10 ** 2);
+  // Relative humidity from t2m (°C) and d2m (°C)
+  const relativeHumidityPct = computeRelativeHumidity(form.t2m, form.d2m);
+
   const skyCondition =
-    form.tcc > 50 ? 'cloud' : form.i10fg > 11 ? 'dust' : form.t2m > 40 ? 'heatwave' : 'clear';
+    req.features.tcc > 0.5
+      ? 'cloud'
+      : form.i10fg > 11 || form.blh < 350
+        ? 'dust'
+        : form.t2m > 40
+          ? 'heatwave'
+          : 'clear';
 
   const pv = simulatePvPowerStep({
     tech: req.panelTech,
@@ -81,6 +107,10 @@ export function computePhysicsReferenceFrom23Features(req: PointPredictionReques
     tAmbC: form.t2m,
     windSpeedMs,
     skyCondition,
+    tcwvKgM2: req.features.tcwv,
+    relativeHumidityPct,
+    blhM: req.features.blh,
+    cloudWaterKgM2: req.features.tciw + req.features.tclw,
   });
 
   return {

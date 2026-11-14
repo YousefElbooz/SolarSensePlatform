@@ -13,6 +13,11 @@ import {
   windSpeedDirToUV,
   windUVToSpeedDir,
 } from '../features';
+import {
+  computeRelativeHumidity,
+  computeSolarPosition,
+  deriveDniFromFdir,
+} from '../physics';
 
 function runTests() {
   // 1. Verify exact count and order of 23 features
@@ -82,7 +87,28 @@ function runTests() {
   assert.equal(badRes.valid, false);
   assert.equal(badRes.errorField, 'tcc');
 
-  console.log('✓ All 23-feature conversion, wind u/v, and schema validation tests passed.');
+  // 7. pvlib / PINN physics transformations:
+  // DNI = (fdir / 3600) / cos(zenith)
+  const fdirJm2 = 800 * 3600;
+  const dniAt60Deg = deriveDniFromFdir(fdirJm2, 60, true); // cos(60°) = 0.5 -> DNI = 800 / 0.5 = 1361 (clamped to solar constant)
+  assert.equal(dniAt60Deg, 1361);
+  const dniAt30Deg = deriveDniFromFdir(600 * 3600, 30, true); // cos(30°) = 0.866025 -> ~692.82 W/m²
+  assert.ok(Math.abs(dniAt30Deg - 600 / Math.cos((30 * Math.PI) / 180)) < 0.05);
+
+  // Relative humidity from t2m (°C) and d2m (°C)
+  assert.equal(computeRelativeHumidity(30, 30), 100);
+  const rhDesert = computeRelativeHumidity(41, 8);
+  assert.ok(rhDesert > 5 && rhDesert < 20, `Expected low desert RH, got ${rhDesert}%`);
+
+  // Solar position with pressure=sp (Pa) and temp=t2m (°C)
+  const solarPos = computeSolarPosition(24.09, 32.9, 12.0, 172, {
+    pressurePa: 100400,
+    tempC: 41,
+  });
+  assert.equal(solarPos.pressurePa, 100400);
+  assert.ok(solarPos.elevationDeg > 75, 'Summer noon in Aswan must have high solar elevation');
+
+  console.log('✓ All 23-feature conversion, wind u/v, pvlib physics, and schema validation tests passed.');
 }
 
 runTests();

@@ -279,6 +279,7 @@ function DigitalTwinContent() {
       tiltDeg,
       panelAzimuthDeg: 180,
       skyCondition,
+      albedo: activeRegion.albedo,
     });
 
     // Apply GHI override from /predict if present
