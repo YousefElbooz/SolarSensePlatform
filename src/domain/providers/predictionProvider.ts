@@ -1,268 +1,214 @@
-// SolarSense Domain: PredictionProvider Interface (Forecast + Yield Atlas)
-// Platform Context §5.4: Two different numbers, two different sources:
-// 1. Short-term forecast (1h / 6h / 24h with P10-P90 band)
-// 2. Long-term climatological yield atlas (monthly kWh/kWp per region × technology)
+// SolarSense Domain: Point Prediction Provider & Physics Stand-In
+// Implements Section 9 & Section 12 of PLAN_doc_representation_modifications.md
+// Rule 12.3: A stand-in never carries a model name or version.
 
-import { PANEL_TECHNOLOGIES } from '../panels';
-import { computeSolarPosition, simulateIrradianceAndPoa, simulatePvPowerStep } from '../physics';
 import {
-  ForecastPoint,
-  ForecastResult,
-  PanelTech,
-  RegionId,
-  SitePoint,
-  SkyCondition,
-  SystemSpec,
-  YieldResult,
-} from '../types';
+  checkCrossFieldWarnings,
+  datasetVectorToFormVector,
+  getDayOfYearFromDateStr,
+} from '../features';
+import { computeSolarPosition, simulatePvPowerStep } from '../physics';
+import { SAVED_REGIONS } from '../regions.config';
+import { PointPredictionRequest, PointPredictionResponse } from '../types';
 
-export interface PredictionProvider {
-  forecast(params: {
-    site: SitePoint;
-    system: SystemSpec;
-    horizonH?: 1 | 6 | 24;
-    mode?: 'replay' | 'live';
-    skyCondition?: SkyCondition;
-    dayOfYear?: number;
-  }): ForecastResult;
+const REFERENCE_SYSTEM_KWP = 10.0;
 
-  yield(site: SitePoint, system: SystemSpec): YieldResult;
-}
+export function computePhysicsReferenceFrom23Features(req: PointPredictionRequest): {
+  pClearKw: number;
+  pPhysicsKw: number;
+  gPoaWm2: number;
+  tCellC: number;
+  solarElevationDeg: number;
+  warnings: string[];
+} {
+  const regionInfo = SAVED_REGIONS[req.region];
+  const { lat, lon } = regionInfo.representativePoint;
 
-// Baseline monthly specific yield (kWh / kWp) per region before technology thermal adjustment
-const REGIONAL_MONTHLY_BASE_YIELD: Record<RegionId, number[]> = {
-  'north-coast-delta': [112, 124, 156, 174, 192, 198, 195, 186, 164, 142, 118, 106], // ~1,867 kWh/kWp
-  'western-desert': [144, 156, 184, 198, 212, 216, 214, 206, 188, 168, 148, 138], // ~2,172 kWh/kWp
-  'sinai-red-sea': [136, 148, 176, 190, 204, 208, 205, 198, 180, 160, 140, 130], // ~2,075 kWh/kWp
-  'nile-valley-upper-egypt': [142, 154, 182, 196, 208, 212, 210, 204, 186, 166, 146, 136], // ~2,142 kWh/kWp
-};
+  const datePart = req.datetimeUtc.slice(0, 10);
+  const hourUtc = Number(req.datetimeUtc.slice(11, 13)) || 10;
+  const doy = getDayOfYearFromDateStr(datePart);
+  const hourLocal = hourUtc + 2;
 
-// Average daytime ambient temperatures (°C) by month per region
-const REGIONAL_MONTHLY_TEMP_C: Record<RegionId, number[]> = {
-  'north-coast-delta': [17, 18, 20, 24, 27, 30, 31, 31, 29, 26, 22, 18],
-  'western-desert': [20, 23, 27, 33, 38, 41, 42, 42, 38, 33, 26, 21],
-  'sinai-red-sea': [21, 22, 25, 29, 33, 36, 37, 37, 34, 30, 26, 22],
-  'nile-valley-upper-egypt': [21, 24, 28, 34, 39, 42, 43, 43, 39, 34, 27, 22],
-};
+  const form = datasetVectorToFormVector(req.features);
+  const warnings = checkCrossFieldWarnings(form);
 
-export class PhysicsAtlasPredictionProvider implements PredictionProvider {
-  forecast(params: {
-    site: SitePoint;
-    system: SystemSpec;
-    horizonH?: 1 | 6 | 24;
-    mode?: 'replay' | 'live';
-    skyCondition?: SkyCondition;
-    dayOfYear?: number;
-  }): ForecastResult {
-    const {
-      site,
-      system,
-      horizonH = 1,
-      mode = 'replay',
-      skyCondition = 'clear',
-      dayOfYear = 135,
-    } = params;
+  // Mid-hour solar geometry (hourLocal - 0.5) matching ERA5 preceding-hour radiation accumulation
+  const solar = computeSolarPosition(lat, lon, hourLocal - 0.5, doy);
 
-    const points: ForecastPoint[] = [];
-    const monthlyTemps = REGIONAL_MONTHLY_TEMP_C[site.region];
-    const peakAmbTemp = monthlyTemps[4]; // May typical
+  const ghiWm2 = Math.max(0, form.ssrd);
+  const fdirWm2 = Math.max(0, Math.min(ghiWm2, form.fdir));
+  const dhiWm2 = Math.max(0, ghiWm2 - fdirWm2);
+  const ghiClearWm2 = Math.max(ghiWm2, form.ssrdc);
 
-    // Generate 16 daytime hours matching the ERA5 archive (04:00 to 19:00 local Cairo time)
-    for (let hourLocal = 5; hourLocal <= 19; hourLocal++) {
-      // Compute sun position at mid-hour (t - 0.5h) per Handover §5.2
-      const solar = computeSolarPosition(site.cellLat, site.cellLon, hourLocal - 0.5, dayOfYear);
-      const irr = simulateIrradianceAndPoa({
-        solar,
-        tiltDeg: system.tiltDeg || Math.round(site.cellLat),
-        panelAzimuthDeg: system.azimuthDeg || 180,
-        skyCondition,
-      });
+  const DEG2RAD = Math.PI / 180;
+  const tiltDeg = Math.round(lat * 0.9);
+  const panelAzimuthDeg = 180;
 
-      const diurnalSwing = Math.sin(((hourLocal - 6) / 14) * Math.PI);
-      const tAmbC = Math.round((peakAmbTemp - 9 + diurnalSwing * 10) * 10) / 10;
-      const windSpeedMs = site.region === 'sinai-red-sea' ? 5.8 : 3.6;
+  let poaWm2 = 0;
+  let poaClearWm2 = 0;
 
-      const pv = simulatePvPowerStep({
-        tech: system.tech,
-        kWp: system.kWp,
-        poaWm2: irr.poaWm2,
-        poaClearWm2: irr.poaClearWm2,
-        tAmbC,
-        windSpeedMs,
-        skyCondition,
-      });
+  if (solar.elevationDeg > 0 && ghiWm2 > 0) {
+    const sinElev = Math.max(0.08, Math.sin(solar.elevationDeg * DEG2RAD));
+    const dniWm2 = fdirWm2 / sinElev;
+    const zenithRad = solar.zenithDeg * DEG2RAD;
+    const tiltRad = tiltDeg * DEG2RAD;
+    const azDiffRad = (solar.azimuthDeg - panelAzimuthDeg) * DEG2RAD;
 
-      // Uncertainty band widens with horizonH and sky variability (dust/cloud)
-      const baseSpread =
-        skyCondition === 'dust' ? 0.19 : skyCondition === 'cloud' ? 0.22 : 0.08;
-      const horizonFactor = horizonH === 1 ? 1.0 : horizonH === 6 ? 1.35 : 1.65;
-      const spread = baseSpread * horizonFactor;
+    const cosAoi =
+      Math.cos(zenithRad) * Math.cos(tiltRad) +
+      Math.sin(zenithRad) * Math.sin(tiltRad) * Math.cos(azDiffRad);
 
-      const p10Kw = Math.max(0, Math.round(pv.pAcKw * (1 - spread) * 100) / 100);
-      // PGNN constraint: p90 never exceeds clear-sky headroom (1.05 * P_clear)
-      const p90Kw = Math.min(
-        Math.round(pv.pClearKw * 1.05 * 100) / 100,
-        Math.round(pv.pAcKw * (1 + spread * 0.85) * 100) / 100
-      );
+    const beamPoa = dniWm2 * Math.max(0, cosAoi);
+    const skyViewFactor = (1 + Math.cos(tiltRad)) / 2;
+    const groundViewFactor = (1 - Math.cos(tiltRad)) / 2;
+    const diffusePoa = dhiWm2 * skyViewFactor;
+    const groundReflectedPoa = ghiWm2 * regionInfo.albedo * groundViewFactor;
 
-      points.push({
-        targetTime: `2026-05-15T${String(hourLocal).padStart(2, '0')}:00:00+02:00`,
-        hourLocal,
-        solarElevationDeg: Math.round(solar.elevationDeg * 10) / 10,
-        ghiWm2: Math.round(irr.ghiWm2),
-        tAmbC,
-        tCellC: pv.tCellC,
-        kc: Math.round(irr.kc * 100) / 100,
-        pKw: pv.pAcKw,
-        p10Kw,
-        p90Kw: Math.max(pv.pAcKw, p90Kw),
-        pClearKw: pv.pClearKw,
-      });
-    }
-
-    return {
-      issueTime: '2026-05-15T05:00:00+02:00',
-      horizonH,
-      mode,
-      points,
-      source: 'mock',
-      modelName: 'XGBoost + PGNN Constrained Ensemble',
-      modelVersion: 'v1.4-era5-egypt',
-    };
+    poaWm2 = Math.max(0, beamPoa + diffusePoa + groundReflectedPoa);
+    const clearRatio = ghiWm2 > 5 ? ghiClearWm2 / ghiWm2 : 1;
+    poaClearWm2 = Math.max(poaWm2, poaWm2 * clearRatio);
   }
 
-  yield(site: SitePoint, system: SystemSpec): YieldResult {
-    const baseMonthly = REGIONAL_MONTHLY_BASE_YIELD[site.region];
-    const tempsMonthly = REGIONAL_MONTHLY_TEMP_C[site.region];
-    const spec = PANEL_TECHNOLOGIES[system.tech];
+  const windSpeedMs = Math.hypot(form.u10, form.v10);
+  const skyCondition =
+    form.tcc > 50 ? 'cloud' : form.i10fg > 11 ? 'dust' : form.t2m > 40 ? 'heatwave' : 'clear';
 
-    // Latitude factor inside region (southern cells have slightly higher insolation)
-    const latBonus = 1 + (28.0 - site.cellLat) * 0.008;
+  const pv = simulatePvPowerStep({
+    tech: req.panelTech,
+    kWp: REFERENCE_SYSTEM_KWP,
+    poaWm2,
+    poaClearWm2,
+    tAmbC: form.t2m,
+    windSpeedMs,
+    skyCondition,
+  });
 
-    // Tilt orientation factor (optimal tilt in Egypt is ~26° facing South 180°)
-    const tiltDiff = Math.abs((system.tiltDeg || 26) - site.cellLat * 0.9);
-    const tiltFactor = Math.max(0.86, 1 - tiltDiff * 0.0022);
-
-    const monthlySpecificKwhPerKwp: number[] = [];
-    const monthlyKwh: number[] = [];
-
-    for (let m = 0; m < 12; m++) {
-      const tAmb = tempsMonthly[m];
-      const tCellAvg = tAmb + 22; // average daytime operating cell temperature rise
-      // Reference baseline assumes gamma = -0.38%/°C; adjust by chosen technology's gamma
-      const gammaDelta = (spec.tempCoeffPctPerC - -0.38) / 100;
-      const thermalMultiplier = 1 + gammaDelta * Math.max(0, tCellAvg - 25);
-
-      // Regional spectral bonus: CIGS excels in coastal/Sinai haze; HJT excels in desert/Upper Egypt
-      const regionalTechMultiplier =
-        system.tech === 'a-Si:H/sc-Si'
-          ? 1.032
-          : system.tech === 'CIGS' &&
-              (site.region === 'north-coast-delta' || site.region === 'sinai-red-sea')
-            ? 1.028
-            : system.tech === 'CIGS'
-              ? 1.01
-              : 0.985;
-
-      const specificM =
-        baseMonthly[m] * latBonus * tiltFactor * thermalMultiplier * regionalTechMultiplier;
-      const roundedSpecific = Math.round(specificM * 10) / 10;
-      monthlySpecificKwhPerKwp.push(roundedSpecific);
-      monthlyKwh.push(Math.round(roundedSpecific * system.kWp));
-    }
-
-    const specificYield = Math.round(
-      monthlySpecificKwhPerKwp.reduce((acc, v) => acc + v, 0)
-    );
-    const annualKwh = Math.round(monthlyKwh.reduce((acc, v) => acc + v, 0));
-
-    // Performance Ratio reflects thermal and system losses
-    const basePr =
-      system.tech === 'a-Si:H/sc-Si' ? 0.835 : system.tech === 'CIGS' ? 0.812 : 0.782;
-    const regionHeatPenalty =
-      site.region === 'nile-valley-upper-egypt' || site.region === 'western-desert'
-        ? (spec.tempCoeffPctPerC * -0.04)
-        : 0;
-    const performanceRatio = Math.round((basePr - regionHeatPenalty) * 1000) / 1000;
-
-    return {
-      annualKwh,
-      monthlyKwh,
-      monthlySpecificKwhPerKwp,
-      specificYield,
-      performanceRatio,
-      clearSkyAnnualKwh: Math.round(annualKwh * 1.11),
-      source: 'mock',
-    };
-  }
+  return {
+    pClearKw: pv.pClearKw,
+    pPhysicsKw: pv.pAcKw,
+    gPoaWm2: Math.round(poaWm2),
+    tCellC: pv.tCellC,
+    solarElevationDeg: Math.round(solar.elevationDeg * 10) / 10,
+    warnings,
+  };
 }
 
-export const predictionProvider = new PhysicsAtlasPredictionProvider();
-
-/**
- * Calls the external Python FastAPI ML Server (pvlib + XGBoost / LSTM / PGNN)
- * when `PYTHON_ML_SERVICE_URL` is configured, falling back to `PhysicsAtlasPredictionProvider`
- * if the environment variable is unset or the Python service is unreachable.
- */
-export async function resolveForecastWithPythonServer(params: {
-  site: SitePoint;
-  system: SystemSpec;
-  horizonH?: 1 | 6 | 24;
-  mode?: 'replay' | 'live';
-  skyCondition?: SkyCondition;
-  dayOfYear?: number;
-  modelKey?: 'xgb' | 'lstm' | 'pgnn';
-}): Promise<ForecastResult> {
+export async function evaluatePointPrediction(
+  req: PointPredictionRequest
+): Promise<PointPredictionResponse> {
+  const phys = computePhysicsReferenceFrom23Features(req);
+  const regionInfo = SAVED_REGIONS[req.region];
   const baseUrl = process.env.PYTHON_ML_SERVICE_URL?.replace(/\/+$/, '');
-  if (!baseUrl) {
-    return predictionProvider.forecast(params);
-  }
 
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (process.env.PYTHON_ML_API_KEY) {
-      headers['Authorization'] = `Bearer ${process.env.PYTHON_ML_API_KEY}`;
-    }
+  if (baseUrl) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4500);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (process.env.PYTHON_ML_API_KEY) {
+        headers['Authorization'] = `Bearer ${process.env.PYTHON_ML_API_KEY}`;
+      }
 
-    const res = await fetch(`${baseUrl}/v1/predict`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        site: {
-          cellId: params.site.cellId,
-          cellLat: params.site.cellLat,
-          cellLon: params.site.cellLon,
-          region: params.site.region,
+      const res = await fetch(`${baseUrl}/v1/predict`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          region: req.region,
+          regionNumber: regionInfo.regionNumber,
+          datetimeUtc: req.datetimeUtc,
+          panelTech: req.panelTech,
+          features: req.features,
+        }),
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        throw new Error(`Python ML service returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const val =
+        typeof data?.prediction?.value === 'number'
+          ? data.prediction.value
+          : typeof data?.value === 'number'
+            ? data.value
+            : phys.pPhysicsKw;
+      const unit =
+        typeof data?.prediction?.unit === 'string'
+          ? data.prediction.unit
+          : 'kW (10 kWp reference array)';
+      const modelVersion =
+        typeof data?.modelVersion === 'string' && data.modelVersion.trim().length > 0
+          ? data.modelVersion.trim()
+          : 'python-ml-v1';
+
+      const serviceWarnings = Array.isArray(data?.warnings) ? data.warnings : [];
+
+      return {
+        prediction: {
+          value: Math.round(val * 1000) / 1000,
+          unit,
+          specificKwPerKwp: Math.round((val / REFERENCE_SYSTEM_KWP) * 1000) / 1000,
+          referenceSystemKwp: REFERENCE_SYSTEM_KWP,
         },
-        system: params.system,
-        horizonH: params.horizonH ?? 1,
-        mode: params.mode ?? 'replay',
-        skyCondition: params.skyCondition ?? 'clear',
-        dayOfYear: params.dayOfYear ?? 135,
-        modelKey: params.modelKey ?? 'pgnn',
-      }),
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    clearTimeout(timer);
-
-    if (!res.ok) {
-      throw new Error(`Python ML Server HTTP ${res.status}`);
+        source: 'model',
+        modelVersion,
+        physicsReference: {
+          pClearKw: phys.pClearKw,
+          pPhysicsKw: phys.pPhysicsKw,
+          gPoaWm2: phys.gPoaWm2,
+          tCellC: phys.tCellC,
+          solarElevationDeg: phys.solarElevationDeg,
+        },
+        warnings: [...phys.warnings, ...serviceWarnings],
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Service unreachable';
+      return {
+        prediction: {
+          value: phys.pPhysicsKw,
+          unit: 'kW (10 kWp reference array)',
+          specificKwPerKwp: Math.round((phys.pPhysicsKw / REFERENCE_SYSTEM_KWP) * 1000) / 1000,
+          referenceSystemKwp: REFERENCE_SYSTEM_KWP,
+        },
+        source: 'stand-in',
+        physicsReference: {
+          pClearKw: phys.pClearKw,
+          pPhysicsKw: phys.pPhysicsKw,
+          gPoaWm2: phys.gPoaWm2,
+          tCellC: phys.tCellC,
+          solarElevationDeg: phys.solarElevationDeg,
+        },
+        warnings: [
+          ...phys.warnings,
+          `Python ML service (${baseUrl}) unreachable (${msg}); showing physics stand-in calculation.`,
+        ],
+      };
     }
-
-    const payload = (await res.json()) as ForecastResult;
-    return {
-      ...payload,
-      source: 'model',
-    };
-  } catch {
-    // Graceful degradation (Handover Principle 6): fallback to deterministic physics + ERA5 atlas
-    return predictionProvider.forecast(params);
   }
+
+  return {
+    prediction: {
+      value: phys.pPhysicsKw,
+      unit: 'kW (10 kWp reference array)',
+      specificKwPerKwp: Math.round((phys.pPhysicsKw / REFERENCE_SYSTEM_KWP) * 1000) / 1000,
+      referenceSystemKwp: REFERENCE_SYSTEM_KWP,
+    },
+    source: 'stand-in',
+    physicsReference: {
+      pClearKw: phys.pClearKw,
+      pPhysicsKw: phys.pPhysicsKw,
+      gPoaWm2: phys.gPoaWm2,
+      tCellC: phys.tCellC,
+      solarElevationDeg: phys.solarElevationDeg,
+    },
+    warnings: [
+      ...phys.warnings,
+      'Python ML service (PYTHON_ML_SERVICE_URL) is not connected; showing PVWatts/Faiman physics stand-in calculation.',
+    ],
+  };
 }
-
-

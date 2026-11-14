@@ -3,18 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  Sun,
-  Layers,
-  Globe2,
-  Box,
-  FileSpreadsheet,
-  Activity,
-  BarChart3,
-  Bot,
-  Info,
-  Languages,
-} from 'lucide-react';
+import { Sun, Box, Activity, Languages } from 'lucide-react';
 
 type Lang = 'en' | 'ar';
 
@@ -62,15 +51,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 }
 
 const NAV_LINKS = [
-  { href: '/', labelEn: 'Day Arc', labelAr: 'مسار الشمس', shortEn: 'Plan', icon: Sun },
-  { href: '/panels', labelEn: 'Panels', labelAr: 'الألواح', shortEn: 'Panels', icon: Layers },
-  { href: '/regions', labelEn: 'Regions', labelAr: 'الأقاليم', shortEn: 'Regions', icon: Globe2 },
-  { href: '/twin', labelEn: '3D Twin', labelAr: 'التوأم 3D', shortEn: 'Twin', icon: Box },
-  { href: '/report/demo', labelEn: 'Report', labelAr: 'التقرير', shortEn: 'Report', icon: FileSpreadsheet },
-  { href: '/app', labelEn: 'Operate', labelAr: 'التشغيل', shortEn: 'Operate', icon: Activity },
-  { href: '/app/models', labelEn: 'Models', labelAr: 'النماذج', shortEn: 'Models', icon: BarChart3 },
-  { href: '/app/assistant', labelEn: 'Assistant', labelAr: 'المساعد', shortEn: 'AI', icon: Bot },
-  { href: '/about', labelEn: 'Methods', labelAr: 'المنهجية', shortEn: 'Methods', icon: Info },
+  { href: '/', labelEn: 'Intro', labelAr: 'المقدمة', shortEn: 'Intro', icon: Sun },
+  { href: '/twin', labelEn: 'Digital twin', labelAr: 'التوأم الرقمي', shortEn: 'Twin', icon: Box },
+  {
+    href: '/predict',
+    labelEn: 'Prediction test',
+    labelAr: 'اختبار التنبؤ',
+    shortEn: 'Predict',
+    icon: Activity,
+  },
 ] as const;
 
 let routesPrefetchedOnce = false;
@@ -81,12 +70,10 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
   const { isAr, toggleLang } = useLanguage();
   const [optimisticHref, setOptimisticHref] = useState<string | null>(null);
 
-  // Clear optimistic tab indicator once pathname settles
   useEffect(() => {
     setOptimisticHref(null);
   }, [pathname]);
 
-  // Proactively prefetch all Navbar routes once during browser idle time so tab switching is instant
   useEffect(() => {
     if (routesPrefetchedOnce) return;
     routesPrefetchedOnce = true;
@@ -99,9 +86,9 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
           } catch {
             // ignore prefetch errors
           }
-        }, index * 60);
+        }, index * 50);
       });
-    }, 150);
+    }, 120);
 
     return () => clearTimeout(timer);
   }, [router]);
@@ -110,7 +97,6 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
 
   return (
     <>
-      {/* Scroll Edge Effect (liquid-glass.md › Review checklist #6): blurs content meeting the top bar without a solid bar background */}
       <div className="scroll-edge-top fixed top-0 left-0 right-0 z-30 h-20" aria-hidden="true" />
 
       <header className="fixed top-0 left-0 right-0 z-40">
@@ -128,10 +114,9 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
               <span>SolarSense</span>
             </Link>
 
-            {/* Desktop Floating Liquid Glass Capsule Tab Bar (liquid-glass.md & tab-bars.md) */}
             <nav
               aria-label="Primary Navigation"
-              className="liquid-glass hidden items-center gap-0.5 rounded-full p-1 lg:flex"
+              className="liquid-glass hidden items-center gap-1 rounded-full p-1 md:flex"
             >
               {NAV_LINKS.map((item) => {
                 const Icon = item.icon;
@@ -146,9 +131,7 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
                     prefetch={true}
                     onMouseDown={() => setOptimisticHref(item.href)}
                     aria-current={active ? 'page' : undefined}
-                    aria-label={isAr ? item.labelAr : item.labelEn}
-                    title={isAr ? item.labelAr : item.labelEn}
-                    className={`flex min-h-[32px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12.5px] tracking-[-0.008em] transition-all duration-150 active:scale-[0.97] min-[1440px]:px-3 ${
+                    className={`flex min-h-[34px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-1 text-[13px] tracking-[-0.008em] transition-all duration-150 active:scale-[0.97] ${
                       active
                         ? 'bg-white/[0.14] font-semibold text-white shadow-[0_2px_10px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.24)]'
                         : 'font-medium text-[#b4b8cb] hover:bg-white/[0.06] hover:text-white'
@@ -159,10 +142,7 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
                         active ? 'text-[#ffd60a]' : 'text-[#8e93a8]'
                       }`}
                     />
-                    {/* Below 1440px only the current page keeps its label, so nine items never push the controls off screen */}
-                    <span className={active ? '' : 'hidden min-[1440px]:inline'}>
-                      {isAr ? item.labelAr : item.labelEn}
-                    </span>
+                    <span>{isAr ? item.labelAr : item.labelEn}</span>
                   </Link>
                 );
               })}
@@ -194,10 +174,10 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
         </div>
       </header>
 
-      {/* Phone / Compact Floating Liquid Glass Bottom Tab Bar (tab-bars.md › Phone (iOS)) */}
+      {/* Phone Bottom Tab Bar: 3 equal tabs with zero horizontal scrolling */}
       <nav
         aria-label="Mobile Navigation"
-        className="liquid-glass no-scrollbar fixed bottom-3 left-3 right-3 z-50 flex items-center justify-between gap-1 overflow-x-auto rounded-full px-2 py-1.5 lg:hidden"
+        className="liquid-glass fixed bottom-3 left-3 right-3 z-50 grid grid-cols-3 gap-1 rounded-full px-2 py-1.5 md:hidden"
       >
         {NAV_LINKS.map((item) => {
           const Icon = item.icon;
@@ -212,14 +192,14 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
               prefetch={true}
               onMouseDown={() => setOptimisticHref(item.href)}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-[40px] min-w-[54px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full px-2.5 py-1 text-[10.5px] transition-all active:scale-[0.96] ${
+              className={`flex min-h-[42px] flex-col items-center justify-center gap-0.5 rounded-full px-2 py-1 text-[11px] transition-all active:scale-[0.96] ${
                 active
                   ? 'bg-white/[0.15] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]'
                   : 'font-medium text-[#b4b8cb]'
               }`}
             >
               <Icon className={`h-4 w-4 ${active ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
-              <span>{isAr ? item.labelAr : item.shortEn}</span>
+              <span className="truncate">{isAr ? item.labelAr : item.labelEn}</span>
             </Link>
           );
         })}

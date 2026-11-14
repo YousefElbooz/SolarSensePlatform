@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import * as THREE from 'three';
 import { Navbar, useLanguage } from '@/components/Navbar';
-import { ANCHOR_CITIES, snapToGridCell } from '@/domain/regions';
+import { resolveRegion, SAVED_REGION_LIST, snapToGridCell } from '@/domain/regions';
 import { normalizePanelTech, PANEL_TECHNOLOGIES, PANEL_TECH_LIST } from '@/domain/panels';
 import {
   computeSolarPosition,
@@ -12,8 +12,8 @@ import {
   simulateIrradianceAndPoa,
   simulatePvPowerStep,
 } from '@/domain/physics';
-import { PanelTech, SeasonId, SkyCondition } from '@/domain/types';
-import { Play, Pause, Thermometer, Zap, Eye, Cpu, Compass } from 'lucide-react';
+import { PanelTech, RegionId, SeasonId, SkyCondition } from '@/domain/types';
+import { Play, Pause, Thermometer, Zap, Eye, Cpu, Compass, RotateCcw } from 'lucide-react';
 
 type TwinNodeId = 'sun' | 'array' | 'inverter' | 'battery' | 'load' | 'grid';
 
@@ -152,9 +152,36 @@ function makeSolarCellTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+function parseDateToDoyAndSeason(dateStr: string | null): {
+  doy: number | null;
+  season: SeasonId;
+} {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return { doy: null, season: 'summer' };
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(dt.getTime())) {
+    return { doy: null, season: 'summer' };
+  }
+  const start = new Date(Date.UTC(y, 0, 0));
+  const doy = Math.max(1, Math.min(365, Math.floor((dt.getTime() - start.getTime()) / 86_400_000)));
+  let season: SeasonId = 'summer';
+  if (m === 12 || m <= 2) season = 'winter';
+  else if (m >= 3 && m <= 5) season = 'spring';
+  else if (m >= 6 && m <= 8) season = 'summer';
+  else season = 'autumn';
+  return { doy, season };
+}
+
 function DigitalTwinContent() {
   const searchParams = useSearchParams();
   const { isAr } = useLanguage();
+
+  const initialDateMeta = useMemo(
+    () => parseDateToDoyAndSeason(searchParams.get('date')),
+    [searchParams]
+  );
 
   const [tech, setTech] = useState<PanelTech>(() =>
     normalizePanelTech(searchParams.get('tech') || 'a-Si:H/sc-Si')
@@ -163,10 +190,57 @@ function DigitalTwinContent() {
     const c = Number(searchParams.get('count') ?? 24);
     return Number.isNaN(c) ? 24 : Math.max(6, Math.min(56, c));
   });
-  const [cityId, setCityId] = useState<string>('aswan-benban');
-  const [hourLocal, setHourLocal] = useState<number>(12.5);
-  const [season, setSeason] = useState<SeasonId>('summer');
-  const [skyCondition, setSkyCondition] = useState<SkyCondition>('clear');
+  const [regionId, setRegionId] = useState<RegionId>(() => {
+    const r = resolveRegion(searchParams.get('region'));
+    return r ? r.id : 'nile-valley-upper-egypt';
+  });
+  const [hourLocal, setHourLocal] = useState<number>(() => {
+    const rawHourUtc = searchParams.get('hour');
+    if (rawHourUtc !== null && rawHourUtc.trim() !== '') {
+      const hUtc = Number(rawHourUtc);
+      if (Number.isFinite(hUtc)) {
+        const localH = (hUtc + 2 + 24) % 24;
+        return Math.max(5, Math.min(19.5, localH));
+      }
+    }
+    return 12.5;
+  });
+  const [customDoy, setCustomDoy] = useState<number | null>(() => initialDateMeta.doy);
+  const [customDateLabel, setCustomDateLabel] = useState<string | null>(() =>
+    searchParams.get('date')
+  );
+  const [season, setSeason] = useState<SeasonId>(() => initialDateMeta.season);
+  const [skyCondition, setSkyCondition] = useState<SkyCondition>(() => {
+    const rawCloud = searchParams.get('cloud');
+    const rawTamb = searchParams.get('tamb');
+    if (rawCloud !== null && Number.isFinite(Number(rawCloud)) && Number(rawCloud) >= 45) {
+      return 'cloud';
+    }
+    if (rawTamb !== null && Number.isFinite(Number(rawTamb)) && Number(rawTamb) >= 40) {
+      return 'heatwave';
+    }
+    return 'clear';
+  });
+  const [weatherOverride, setWeatherOverride] = useState<{
+    ghiWm2?: number;
+    tAmbC?: number;
+    windMs?: number;
+    cloudPct?: number;
+  } | null>(() => {
+    const rawGhi = searchParams.get('ghi');
+    const rawTamb = searchParams.get('tamb');
+    const rawWind = searchParams.get('wind');
+    const rawCloud = searchParams.get('cloud');
+    const ghiWm2 = rawGhi !== null && Number.isFinite(Number(rawGhi)) ? Number(rawGhi) : undefined;
+    const tAmbC = rawTamb !== null && Number.isFinite(Number(rawTamb)) ? Number(rawTamb) : undefined;
+    const windMs = rawWind !== null && Number.isFinite(Number(rawWind)) ? Number(rawWind) : undefined;
+    const cloudPct = rawCloud !== null && Number.isFinite(Number(rawCloud)) ? Number(rawCloud) : undefined;
+    if (ghiWm2 !== undefined || tAmbC !== undefined || windMs !== undefined || cloudPct !== undefined) {
+      return { ghiWm2, tAmbC, windMs, cloudPct };
+    }
+    return null;
+  });
+
   const [heatmapMode, setHeatmapMode] = useState<'power' | 'temperature'>('power');
   const [playingDay, setPlayingDay] = useState<boolean>(false);
   const [showEquationsHud, setShowEquationsHud] = useState<boolean>(true);
@@ -177,25 +251,58 @@ function DigitalTwinContent() {
   const leaderLineRefs = useRef<Partial<Record<TwinNodeId, SVGLineElement | null>>>({});
   const leaderCircleRefs = useRef<Partial<Record<TwinNodeId, SVGCircleElement | null>>>({});
 
-  const city = useMemo(
-    () => ANCHOR_CITIES.find((c) => c.id === cityId) || ANCHOR_CITIES[0],
-    [cityId]
+  const activeRegion = useMemo(
+    () => SAVED_REGION_LIST.find((r) => r.id === regionId) || SAVED_REGION_LIST[0],
+    [regionId]
   );
-  const site = useMemo(() => snapToGridCell(city.lat, city.lon), [city]);
+  const site = useMemo(
+    () =>
+      snapToGridCell(
+        activeRegion.representativePoint.lat,
+        activeRegion.representativePoint.lon
+      ),
+    [activeRegion]
+  );
   const spec = PANEL_TECHNOLOGIES[tech];
   const systemKwp = Math.round(panelCount * (spec.panelWp / 1000) * 100) / 100;
   const tiltDeg = Math.round(site.cellLat * 0.9);
-  const windSpeedMs = 3.8;
+  const windSpeedMs =
+    weatherOverride?.windMs !== undefined
+      ? Math.round(Math.max(0, weatherOverride.windMs) * 10) / 10
+      : 3.8;
 
   const telemetry = useMemo(() => {
-    const doy = getDayOfYear(season);
+    const doy = customDoy ?? getDayOfYear(season);
     const solar = computeSolarPosition(site.cellLat, site.cellLon, hourLocal, doy);
-    const irr = simulateIrradianceAndPoa({
+    const baseIrr = simulateIrradianceAndPoa({
       solar,
       tiltDeg,
       panelAzimuthDeg: 180,
       skyCondition,
     });
+
+    // Apply GHI override from /predict if present
+    let irr = baseIrr;
+    if (weatherOverride?.ghiWm2 !== undefined && baseIrr.ghiClearWm2 > 1) {
+      const targetGhi = Math.max(0, weatherOverride.ghiWm2);
+      const scale = baseIrr.ghiWm2 > 1 ? targetGhi / baseIrr.ghiWm2 : 0;
+      const kc = Math.min(1.15, Math.max(0, targetGhi / baseIrr.ghiClearWm2));
+      irr = {
+        ...baseIrr,
+        ghiWm2: Math.round(targetGhi * 10) / 10,
+        dniWm2: Math.round(baseIrr.dniWm2 * scale * 10) / 10,
+        dhiWm2: Math.round(baseIrr.dhiWm2 * scale * 10) / 10,
+        poaWm2: Math.round(Math.max(targetGhi * 0.85, baseIrr.poaWm2 * scale) * 10) / 10,
+        kc: Math.round(kc * 1000) / 1000,
+      };
+    } else if (weatherOverride?.ghiWm2 !== undefined) {
+      const targetGhi = Math.max(0, weatherOverride.ghiWm2);
+      irr = {
+        ...baseIrr,
+        ghiWm2: Math.round(targetGhi * 10) / 10,
+        poaWm2: Math.round(targetGhi * 10) / 10,
+      };
+    }
 
     const baseTemp =
       season === 'summer'
@@ -207,13 +314,16 @@ function DigitalTwinContent() {
             : 21;
     const heatwaveBonus = skyCondition === 'heatwave' ? 6 : 0;
     const diurnal = Math.sin(Math.max(0, ((hourLocal - 5.5) / 14) * Math.PI));
-    const tAmbC = Math.round((baseTemp - 10 + diurnal * 11 + heatwaveBonus) * 10) / 10;
+    const tAmbC =
+      weatherOverride?.tAmbC !== undefined
+        ? Math.round(weatherOverride.tAmbC * 10) / 10
+        : Math.round((baseTemp - 10 + diurnal * 11 + heatwaveBonus) * 10) / 10;
 
     const pv = simulatePvPowerStep({
       tech,
       kWp: systemKwp,
       poaWm2: irr.poaWm2,
-      poaClearWm2: irr.poaClearWm2,
+      poaClearWm2: Math.max(irr.poaWm2, irr.poaClearWm2),
       tAmbC,
       windSpeedMs,
       skyCondition,
@@ -245,7 +355,18 @@ function DigitalTwinContent() {
       gridExportKw,
       batterySocPct,
     };
-  }, [site, season, hourLocal, tiltDeg, skyCondition, tech, systemKwp]);
+  }, [
+    site,
+    customDoy,
+    season,
+    hourLocal,
+    tiltDeg,
+    skyCondition,
+    tech,
+    systemKwp,
+    weatherOverride,
+    windSpeedMs,
+  ]);
 
   useEffect(() => {
     if (!playingDay) return;
@@ -1821,25 +1942,66 @@ function DigitalTwinContent() {
                     max={19.5}
                     step={0.25}
                     value={hourLocal}
-                    onChange={(e) => setHourLocal(Number(e.target.value))}
+                    onChange={(e) => {
+                      setWeatherOverride(null);
+                      setHourLocal(Number(e.target.value));
+                    }}
                     className="mt-1.5 w-full"
                   />
                 </div>
               </div>
 
+              {(weatherOverride || customDateLabel) && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#3fc1c1]/40 bg-[#3fc1c1]/10 px-3.5 py-2 text-xs text-[#9fe9e9]">
+                  <div>
+                    <b className="text-white">
+                      {isAr ? 'حالة مستوردة من صفحة التنبؤ:' : 'Loaded hour from Prediction Test:'}
+                    </b>{' '}
+                    <span className="font-mono">
+                      {isAr ? activeRegion.nameAr : activeRegion.nameEn}
+                      {customDateLabel ? ` · ${customDateLabel}` : ''}
+                      {weatherOverride?.ghiWm2 !== undefined
+                        ? ` · GHI=${Math.round(weatherOverride.ghiWm2)} W/m²`
+                        : ''}
+                      {weatherOverride?.tAmbC !== undefined
+                        ? ` · T_a=${weatherOverride.tAmbC.toFixed(1)}°C`
+                        : ''}
+                      {weatherOverride?.windMs !== undefined
+                        ? ` · v_w=${weatherOverride.windMs.toFixed(1)} m/s`
+                        : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWeatherOverride(null);
+                      setCustomDoy(null);
+                      setCustomDateLabel(null);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-[#3fc1c1]/50 bg-[#05070f]/70 px-2.5 py-1 text-[11px] font-medium text-white transition hover:border-white/50"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    <span>{isAr ? 'العودة للتحكم اليدوي' : 'Reset to interactive presets'}</span>
+                  </button>
+                </div>
+              )}
+
               <div className="mt-4 grid gap-3 border-t border-white/[0.14] pt-3 sm:grid-cols-3">
                 <div>
                   <label className="font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
-                    Site Location (φ, λ)
+                    Saved Region (φ, λ)
                   </label>
                   <select
-                    value={cityId}
-                    onChange={(e) => setCityId(e.target.value)}
+                    value={regionId}
+                    onChange={(e) => {
+                      const next = resolveRegion(e.target.value);
+                      if (next) setRegionId(next.id);
+                    }}
                     className="mt-1.5 w-full rounded-full border border-white/[0.16] bg-[#05070f] px-3.5 py-1.5 text-xs text-white focus:border-[#ffd166] focus:outline-none"
                   >
-                    {ANCHOR_CITIES.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nameEn} ({c.lat.toFixed(1)}°N)
+                    {SAVED_REGION_LIST.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {isAr ? r.nameAr : r.nameEn} ({r.representativePoint.lat.toFixed(2)}°N)
                       </option>
                     ))}
                   </select>
@@ -1854,7 +2016,12 @@ function DigitalTwinContent() {
                       <button
                         key={s}
                         type="button"
-                        onClick={() => setSeason(s)}
+                        onClick={() => {
+                          setCustomDoy(null);
+                          setCustomDateLabel(null);
+                          setWeatherOverride(null);
+                          setSeason(s);
+                        }}
                         className={`apple-segment-btn flex-1 px-2 text-[11px] capitalize ${
                           season === s ? 'active' : ''
                         }`}
@@ -1876,7 +2043,10 @@ function DigitalTwinContent() {
                       <button
                         key={sk}
                         type="button"
-                        onClick={() => setSkyCondition(sk)}
+                        onClick={() => {
+                          setWeatherOverride(null);
+                          setSkyCondition(sk);
+                        }}
                         className={`apple-segment-btn flex-1 px-2 text-[11px] capitalize ${
                           skyCondition === sk ? 'active' : ''
                         }`}

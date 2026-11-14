@@ -8,6 +8,18 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'three', 'gsap'],
   },
+  async redirects() {
+    return [
+      { source: '/panels', destination: '/', permanent: false },
+      { source: '/regions', destination: '/', permanent: false },
+      { source: '/report/:path*', destination: '/', permanent: false },
+      { source: '/app', destination: '/', permanent: false },
+      { source: '/app/:path*', destination: '/', permanent: false },
+      { source: '/about', destination: '/', permanent: false },
+      { source: '/login', destination: '/', permanent: false },
+      { source: '/register', destination: '/', permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;
