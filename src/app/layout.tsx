@@ -1,11 +1,20 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { LanguageProvider } from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: 'SolarSense Egypt · PV Forecasting, 3D Digital Twin & Decision Platform',
+  title: {
+    default: 'SolarSense Egypt · Solar forecasting and digital twin',
+    template: '%s · SolarSense Egypt',
+  },
   description:
-    'Cinematic Egyptian solar photovoltaic planning, 3D digital twin, and physics-guided forecasting platform (ERA5 → pvlib → XGBoost / LSTM / PGNN).',
+    'Plan and simulate rooftop and ground solar in Egypt: a 3D digital twin of a PV site and a photovoltaic power forecast built on ERA5 weather data.',
+  applicationName: 'SolarSense Egypt',
+};
+
+export const viewport: Viewport = {
+  themeColor: '#060810',
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({
@@ -23,7 +32,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-[#05070f] text-[#f4f5fa] antialiased selection:bg-[#f5a524] selection:text-[#1a1100]">
+      <body className="min-h-screen bg-[var(--night)] text-[var(--ink)] antialiased selection:bg-[#f5a524] selection:text-[#1a1100]">
         <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>

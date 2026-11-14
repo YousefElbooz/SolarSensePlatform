@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import * as THREE from 'three';
 import { Navbar, useLanguage } from '@/components/Navbar';
-import { ANCHOR_CITIES, snapToGridCell } from '@/domain/regions';
+import { resolveRegion, SAVED_REGION_LIST, snapToGridCell } from '@/domain/regions';
 import { normalizePanelTech, PANEL_TECHNOLOGIES, PANEL_TECH_LIST } from '@/domain/panels';
 import {
   computeSolarPosition,
@@ -12,8 +12,8 @@ import {
   simulateIrradianceAndPoa,
   simulatePvPowerStep,
 } from '@/domain/physics';
-import { PanelTech, SeasonId, SkyCondition } from '@/domain/types';
-import { Play, Pause, Thermometer, Zap, Eye, Cpu, Compass } from 'lucide-react';
+import { PanelTech, RegionId, SeasonId, SkyCondition } from '@/domain/types';
+import { Play, Pause, Thermometer, Zap, Eye, Cpu, Compass, RotateCcw } from 'lucide-react';
 
 type TwinNodeId = 'sun' | 'array' | 'inverter' | 'battery' | 'load' | 'grid';
 
@@ -152,9 +152,36 @@ function makeSolarCellTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+function parseDateToDoyAndSeason(dateStr: string | null): {
+  doy: number | null;
+  season: SeasonId;
+} {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return { doy: null, season: 'summer' };
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(dt.getTime())) {
+    return { doy: null, season: 'summer' };
+  }
+  const start = new Date(Date.UTC(y, 0, 0));
+  const doy = Math.max(1, Math.min(365, Math.floor((dt.getTime() - start.getTime()) / 86_400_000)));
+  let season: SeasonId = 'summer';
+  if (m === 12 || m <= 2) season = 'winter';
+  else if (m >= 3 && m <= 5) season = 'spring';
+  else if (m >= 6 && m <= 8) season = 'summer';
+  else season = 'autumn';
+  return { doy, season };
+}
+
 function DigitalTwinContent() {
   const searchParams = useSearchParams();
   const { isAr } = useLanguage();
+
+  const initialDateMeta = useMemo(
+    () => parseDateToDoyAndSeason(searchParams.get('date')),
+    [searchParams]
+  );
 
   const [tech, setTech] = useState<PanelTech>(() =>
     normalizePanelTech(searchParams.get('tech') || 'a-Si:H/sc-Si')
@@ -163,10 +190,57 @@ function DigitalTwinContent() {
     const c = Number(searchParams.get('count') ?? 24);
     return Number.isNaN(c) ? 24 : Math.max(6, Math.min(56, c));
   });
-  const [cityId, setCityId] = useState<string>('aswan-benban');
-  const [hourLocal, setHourLocal] = useState<number>(12.5);
-  const [season, setSeason] = useState<SeasonId>('summer');
-  const [skyCondition, setSkyCondition] = useState<SkyCondition>('clear');
+  const [regionId, setRegionId] = useState<RegionId>(() => {
+    const r = resolveRegion(searchParams.get('region'));
+    return r ? r.id : 'nile-valley-upper-egypt';
+  });
+  const [hourLocal, setHourLocal] = useState<number>(() => {
+    const rawHourUtc = searchParams.get('hour');
+    if (rawHourUtc !== null && rawHourUtc.trim() !== '') {
+      const hUtc = Number(rawHourUtc);
+      if (Number.isFinite(hUtc)) {
+        const localH = (hUtc + 2 + 24) % 24;
+        return Math.max(5, Math.min(19.5, localH));
+      }
+    }
+    return 12.5;
+  });
+  const [customDoy, setCustomDoy] = useState<number | null>(() => initialDateMeta.doy);
+  const [customDateLabel, setCustomDateLabel] = useState<string | null>(() =>
+    searchParams.get('date')
+  );
+  const [season, setSeason] = useState<SeasonId>(() => initialDateMeta.season);
+  const [skyCondition, setSkyCondition] = useState<SkyCondition>(() => {
+    const rawCloud = searchParams.get('cloud');
+    const rawTamb = searchParams.get('tamb');
+    if (rawCloud !== null && Number.isFinite(Number(rawCloud)) && Number(rawCloud) >= 45) {
+      return 'cloud';
+    }
+    if (rawTamb !== null && Number.isFinite(Number(rawTamb)) && Number(rawTamb) >= 40) {
+      return 'heatwave';
+    }
+    return 'clear';
+  });
+  const [weatherOverride, setWeatherOverride] = useState<{
+    ghiWm2?: number;
+    tAmbC?: number;
+    windMs?: number;
+    cloudPct?: number;
+  } | null>(() => {
+    const rawGhi = searchParams.get('ghi');
+    const rawTamb = searchParams.get('tamb');
+    const rawWind = searchParams.get('wind');
+    const rawCloud = searchParams.get('cloud');
+    const ghiWm2 = rawGhi !== null && Number.isFinite(Number(rawGhi)) ? Number(rawGhi) : undefined;
+    const tAmbC = rawTamb !== null && Number.isFinite(Number(rawTamb)) ? Number(rawTamb) : undefined;
+    const windMs = rawWind !== null && Number.isFinite(Number(rawWind)) ? Number(rawWind) : undefined;
+    const cloudPct = rawCloud !== null && Number.isFinite(Number(rawCloud)) ? Number(rawCloud) : undefined;
+    if (ghiWm2 !== undefined || tAmbC !== undefined || windMs !== undefined || cloudPct !== undefined) {
+      return { ghiWm2, tAmbC, windMs, cloudPct };
+    }
+    return null;
+  });
+
   const [heatmapMode, setHeatmapMode] = useState<'power' | 'temperature'>('power');
   const [playingDay, setPlayingDay] = useState<boolean>(false);
   const [showEquationsHud, setShowEquationsHud] = useState<boolean>(true);
@@ -177,25 +251,58 @@ function DigitalTwinContent() {
   const leaderLineRefs = useRef<Partial<Record<TwinNodeId, SVGLineElement | null>>>({});
   const leaderCircleRefs = useRef<Partial<Record<TwinNodeId, SVGCircleElement | null>>>({});
 
-  const city = useMemo(
-    () => ANCHOR_CITIES.find((c) => c.id === cityId) || ANCHOR_CITIES[0],
-    [cityId]
+  const activeRegion = useMemo(
+    () => SAVED_REGION_LIST.find((r) => r.id === regionId) || SAVED_REGION_LIST[0],
+    [regionId]
   );
-  const site = useMemo(() => snapToGridCell(city.lat, city.lon), [city]);
+  const site = useMemo(
+    () =>
+      snapToGridCell(
+        activeRegion.representativePoint.lat,
+        activeRegion.representativePoint.lon
+      ),
+    [activeRegion]
+  );
   const spec = PANEL_TECHNOLOGIES[tech];
   const systemKwp = Math.round(panelCount * (spec.panelWp / 1000) * 100) / 100;
   const tiltDeg = Math.round(site.cellLat * 0.9);
-  const windSpeedMs = 3.8;
+  const windSpeedMs =
+    weatherOverride?.windMs !== undefined
+      ? Math.round(Math.max(0, weatherOverride.windMs) * 10) / 10
+      : 3.8;
 
   const telemetry = useMemo(() => {
-    const doy = getDayOfYear(season);
+    const doy = customDoy ?? getDayOfYear(season);
     const solar = computeSolarPosition(site.cellLat, site.cellLon, hourLocal, doy);
-    const irr = simulateIrradianceAndPoa({
+    const baseIrr = simulateIrradianceAndPoa({
       solar,
       tiltDeg,
       panelAzimuthDeg: 180,
       skyCondition,
     });
+
+    // Apply GHI override from /predict if present
+    let irr = baseIrr;
+    if (weatherOverride?.ghiWm2 !== undefined && baseIrr.ghiClearWm2 > 1) {
+      const targetGhi = Math.max(0, weatherOverride.ghiWm2);
+      const scale = baseIrr.ghiWm2 > 1 ? targetGhi / baseIrr.ghiWm2 : 0;
+      const kc = Math.min(1.15, Math.max(0, targetGhi / baseIrr.ghiClearWm2));
+      irr = {
+        ...baseIrr,
+        ghiWm2: Math.round(targetGhi * 10) / 10,
+        dniWm2: Math.round(baseIrr.dniWm2 * scale * 10) / 10,
+        dhiWm2: Math.round(baseIrr.dhiWm2 * scale * 10) / 10,
+        poaWm2: Math.round(Math.max(targetGhi * 0.85, baseIrr.poaWm2 * scale) * 10) / 10,
+        kc: Math.round(kc * 1000) / 1000,
+      };
+    } else if (weatherOverride?.ghiWm2 !== undefined) {
+      const targetGhi = Math.max(0, weatherOverride.ghiWm2);
+      irr = {
+        ...baseIrr,
+        ghiWm2: Math.round(targetGhi * 10) / 10,
+        poaWm2: Math.round(targetGhi * 10) / 10,
+      };
+    }
 
     const baseTemp =
       season === 'summer'
@@ -207,13 +314,16 @@ function DigitalTwinContent() {
             : 21;
     const heatwaveBonus = skyCondition === 'heatwave' ? 6 : 0;
     const diurnal = Math.sin(Math.max(0, ((hourLocal - 5.5) / 14) * Math.PI));
-    const tAmbC = Math.round((baseTemp - 10 + diurnal * 11 + heatwaveBonus) * 10) / 10;
+    const tAmbC =
+      weatherOverride?.tAmbC !== undefined
+        ? Math.round(weatherOverride.tAmbC * 10) / 10
+        : Math.round((baseTemp - 10 + diurnal * 11 + heatwaveBonus) * 10) / 10;
 
     const pv = simulatePvPowerStep({
       tech,
       kWp: systemKwp,
       poaWm2: irr.poaWm2,
-      poaClearWm2: irr.poaClearWm2,
+      poaClearWm2: Math.max(irr.poaWm2, irr.poaClearWm2),
       tAmbC,
       windSpeedMs,
       skyCondition,
@@ -245,7 +355,18 @@ function DigitalTwinContent() {
       gridExportKw,
       batterySocPct,
     };
-  }, [site, season, hourLocal, tiltDeg, skyCondition, tech, systemKwp]);
+  }, [
+    site,
+    customDoy,
+    season,
+    hourLocal,
+    tiltDeg,
+    skyCondition,
+    tech,
+    systemKwp,
+    weatherOverride,
+    windSpeedMs,
+  ]);
 
   useEffect(() => {
     if (!playingDay) return;
@@ -1072,16 +1193,16 @@ function DigitalTwinContent() {
       id: 'sun',
       pillLabel: (
         <>
-          01 · Solar Geometry (<i className="font-serif">α</i>
+          Solar Geometry (<i className="font-serif">α</i>
           <sub>s</sub>, <i className="font-serif">γ</i>
           <sub>s</sub>)
         </>
       ),
       title: isAr ? (
-        '01 · الهندسة الفلكية للشمس'
+        'الهندسة الفلكية للشمس'
       ) : (
         <>
-          01 · Solar Geometry (<i className="font-serif">α</i>
+          Solar Geometry (<i className="font-serif">α</i>
           <sub>s</sub>, <i className="font-serif">γ</i>
           <sub>s</sub>)
         </>
@@ -1148,15 +1269,15 @@ function DigitalTwinContent() {
       id: 'array',
       pillLabel: (
         <>
-          02 · PV Array &amp; Faiman <i className="font-serif">T</i>
+          PV Array &amp; Faiman <i className="font-serif">T</i>
           <sub>c</sub>
         </>
       ),
       title: isAr ? (
-        '02 · مصفوفة الألواح وحرارة الخلية'
+        'مصفوفة الألواح وحرارة الخلية'
       ) : (
         <>
-          02 · PV Array &amp; Faiman <i className="font-serif">T</i>
+          PV Array &amp; Faiman <i className="font-serif">T</i>
           <sub>c</sub>
         </>
       ),
@@ -1251,15 +1372,15 @@ function DigitalTwinContent() {
       id: 'inverter',
       pillLabel: (
         <>
-          03 · Hybrid Inverter (<i className="font-serif">P</i>
+          Hybrid Inverter (<i className="font-serif">P</i>
           <sub>AC</sub>)
         </>
       ),
       title: isAr ? (
-        '03 · العاكس الهجين (MPPT)'
+        'العاكس الهجين (MPPT)'
       ) : (
         <>
-          03 · Hybrid Inverter (<i className="font-serif">P</i>
+          Hybrid Inverter (<i className="font-serif">P</i>
           <sub>AC</sub>)
         </>
       ),
@@ -1330,14 +1451,14 @@ function DigitalTwinContent() {
       id: 'battery',
       pillLabel: (
         <>
-          04 · LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
+          LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
         </>
       ),
       title: isAr ? (
-        '04 · بطاريات LiFePO₄'
+        'بطاريات LiFePO₄'
       ) : (
         <>
-          04 · LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
+          LiFePO<sub>4</sub> BESS (<i className="font-serif">SoC</i>)
         </>
       ),
       color: '#3fc1c1',
@@ -1405,15 +1526,15 @@ function DigitalTwinContent() {
       id: 'load',
       pillLabel: (
         <>
-          05 · Facility Load (<i className="font-serif">P</i>
+          Facility Load (<i className="font-serif">P</i>
           <sub>load</sub>)
         </>
       ),
       title: isAr ? (
-        '05 · أحمال المبنى والتكييف'
+        'أحمال المبنى والتكييف'
       ) : (
         <>
-          05 · Facility &amp; HVAC (<i className="font-serif">P</i>
+          Facility &amp; HVAC (<i className="font-serif">P</i>
           <sub>load</sub>)
         </>
       ),
@@ -1481,15 +1602,15 @@ function DigitalTwinContent() {
       id: 'grid',
       pillLabel: (
         <>
-          06 · EETC Grid (<i className="font-serif">P</i>
+          EETC Grid (<i className="font-serif">P</i>
           <sub>grid</sub>)
         </>
       ),
       title: isAr ? (
-        '06 · محطة الربط بالشبكة'
+        'محطة الربط بالشبكة'
       ) : (
         <>
-          06 · EETC Grid (<i className="font-serif">P</i>
+          EETC Grid (<i className="font-serif">P</i>
           <sub>grid</sub>)
         </>
       ),
@@ -1548,66 +1669,73 @@ function DigitalTwinContent() {
           <div>
             <div className="eyebrow">
               {isAr
-                ? 'التوأم الرقمي الهندسي ثلاثي الأبعاد + المعادلات الرياضية الحية'
-                : 'Engineering 3D Digital Twin · Live Mathematical Formulations & Models'}
+                ? 'التوأم الرقمي · محاكاة فيزيائية'
+                : 'Digital twin · physics simulation'}
             </div>
             <h1 className="cinematic-h2 mt-2">
               {isAr ? (
-                'محاكاة فيزيائية حية للمصفوفة، العاكس، البطاريات، الأحمال والشبكة'
+                'نموذج عامل لموقع شمسي، ساعة بساعة'
               ) : (
                 <>
-                  True astronomical sun path,{' '}
-                  <em className="font-normal italic text-[#ffd166]">3D component models</em> &amp;
-                  typeset governing equations
+                  A working model of a solar site,{' '}
+                  <em className="font-normal italic text-[#ffd166]">hour by hour</em>
                 </>
               )}
             </h1>
+            <p className="mt-2 max-w-[64ch] text-[14.5px] leading-relaxed text-[#b4b8cb]">
+              {isAr
+                ? 'حرّك الوقت والموسم وحالة السماء لترى كيف تتغير قدرة الألواح والعاكس والبطارية والحمل والشبكة. كل الأرقام ناتجة عن معادلات فيزيائية وليست قياسات من موقع حقيقي.'
+                : 'Move the time, season and sky to see how the array, inverter, battery, load and grid respond. Every figure is computed from the physics equations shown; none is a measurement from a real site.'}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => setShowEquationsHud((s) => !s)}
-              className={showEquationsHud ? 'btn-pill-primary' : 'btn-pill'}
+              aria-pressed={showEquationsHud}
+              className={`btn-pill ${showEquationsHud ? 'border-[#ffd60a]/60 bg-white/[0.12] text-white' : ''}`}
             >
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className={`h-3.5 w-3.5 ${showEquationsHud ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
               <span>{isAr ? 'المعادلات العائمة 3D' : '3D Math HUDs'}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setHeatmapMode('power')}
-              className={heatmapMode === 'power' ? 'btn-pill-primary' : 'btn-pill'}
-            >
-              <Zap className="h-3.5 w-3.5" />
-              <span>
-                {isAr ? 'خريطة القدرة' : 'Power'} (<i className="font-serif">P</i>
-                <sub>AC</sub>)
-              </span>
-            </button>
+            <div className="apple-segmented" role="group" aria-label="Heatmap Mode">
+              <button
+                type="button"
+                onClick={() => setHeatmapMode('power')}
+                className={`apple-segment-btn ${heatmapMode === 'power' ? 'active' : ''}`}
+              >
+                <Zap className={`h-3.5 w-3.5 ${heatmapMode === 'power' ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
+                <span>
+                  {isAr ? 'القدرة' : 'Power'} (<i className="font-serif">P</i>
+                  <sub>AC</sub>)
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setHeatmapMode('temperature')}
-              className={heatmapMode === 'temperature' ? 'btn-pill-primary' : 'btn-pill'}
-            >
-              <Thermometer className="h-3.5 w-3.5" />
-              <span>
-                {isAr ? 'حرارة الخلية' : 'Cell Temp'} (<i className="font-serif">T</i>
-                <sub>c</sub>)
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setHeatmapMode('temperature')}
+                className={`apple-segment-btn ${heatmapMode === 'temperature' ? 'active' : ''}`}
+              >
+                <Thermometer className={`h-3.5 w-3.5 ${heatmapMode === 'temperature' ? 'text-[#ffd60a]' : 'text-[#8e93a8]'}`} />
+                <span>
+                  {isAr ? 'حرارة الخلية' : 'Cell Temp'} (<i className="font-serif">T</i>
+                  <sub>c</sub>)
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Single-Row Camera Focus & Subsystem Selector Bar */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => focusCameraOnNode('overview')}
-            className="rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-xs text-[#f4f5fa] transition hover:border-[#ffd166]"
+            className="min-h-[34px] cursor-pointer rounded-full border border-white/15 bg-white/[0.05] px-3.5 py-1.5 text-xs font-medium text-[#f5f5f7] transition hover:border-white/30 active:scale-[0.97]"
           >
-            <Compass className="mr-1.5 inline h-3.5 w-3.5 text-[#ffd166]" />
+            <Compass className="mr-1.5 inline h-3.5 w-3.5 text-[#ffd60a]" />
             {isAr ? 'مشهد شامل (Overview)' : 'Full Plant Overview'}
           </button>
           {nodeBadges.map((node) => {
@@ -1617,10 +1745,10 @@ function DigitalTwinContent() {
                 key={node.id}
                 type="button"
                 onClick={() => focusCameraOnNode(node.id)}
-                className={`rounded-full border px-3.5 py-1.5 text-xs transition ${
+                className={`min-h-[34px] cursor-pointer rounded-full border px-3.5 py-1.5 text-xs transition active:scale-[0.97] ${
                   active
-                    ? 'border-[#ffd166] bg-[#f5a524]/20 font-semibold text-[#ffd166]'
-                    : 'border-white/12 bg-white/[0.03] text-[#b9bdcf] hover:border-white/30 hover:text-white'
+                    ? 'border-[#ffd60a]/65 bg-white/[0.14] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]'
+                    : 'border-white/10 bg-white/[0.03] text-[#b4b8cb] hover:border-white/25 hover:text-white'
                 }`}
               >
                 {node.pillLabel}
@@ -1700,10 +1828,10 @@ function DigitalTwinContent() {
                       style={{
                         borderColor: isSel ? '#ffd166' : b.borderColor,
                       }}
-                      className={`group absolute z-10 w-max max-w-[270px] -translate-x-1/2 -translate-y-full cursor-pointer rounded-xl border bg-[#060916]/90 px-3 py-1.5 text-left backdrop-blur-md transition-shadow duration-200 ${
+                      className={`liquid-glass group absolute z-10 w-max max-w-[270px] -translate-x-1/2 -translate-y-full cursor-pointer rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 active:scale-[0.98] ${
                         isSel
-                          ? 'ring-2 ring-[#ffd166]/55 shadow-[0_0_24px_rgba(245,165,36,0.35)]'
-                          : 'hover:border-[#ffd166]'
+                          ? 'ring-2 ring-[#ffd60a]/60 shadow-[0_8px_28px_rgba(245,158,11,0.3)]'
+                          : 'hover:border-[#ffd60a]/70'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -1814,44 +1942,88 @@ function DigitalTwinContent() {
                     max={19.5}
                     step={0.25}
                     value={hourLocal}
-                    onChange={(e) => setHourLocal(Number(e.target.value))}
+                    onChange={(e) => {
+                      setWeatherOverride(null);
+                      setHourLocal(Number(e.target.value));
+                    }}
                     className="mt-1.5 w-full"
                   />
                 </div>
               </div>
 
+              {(weatherOverride || customDateLabel) && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#3fc1c1]/40 bg-[#3fc1c1]/10 px-3.5 py-2 text-xs text-[#9fe9e9]">
+                  <div>
+                    <b className="text-white">
+                      {isAr ? 'حالة مستوردة من صفحة التنبؤ:' : 'Loaded hour from Prediction Test:'}
+                    </b>{' '}
+                    <span className="font-mono">
+                      {isAr ? activeRegion.nameAr : activeRegion.nameEn}
+                      {customDateLabel ? ` · ${customDateLabel}` : ''}
+                      {weatherOverride?.ghiWm2 !== undefined
+                        ? ` · GHI=${Math.round(weatherOverride.ghiWm2)} W/m²`
+                        : ''}
+                      {weatherOverride?.tAmbC !== undefined
+                        ? ` · T_a=${weatherOverride.tAmbC.toFixed(1)}°C`
+                        : ''}
+                      {weatherOverride?.windMs !== undefined
+                        ? ` · v_w=${weatherOverride.windMs.toFixed(1)} m/s`
+                        : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWeatherOverride(null);
+                      setCustomDoy(null);
+                      setCustomDateLabel(null);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-[#3fc1c1]/50 bg-[#05070f]/70 px-2.5 py-1 text-[11px] font-medium text-white transition hover:border-white/50"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    <span>{isAr ? 'العودة للتحكم اليدوي' : 'Reset to interactive presets'}</span>
+                  </button>
+                </div>
+              )}
+
               <div className="mt-4 grid gap-3 border-t border-white/[0.14] pt-3 sm:grid-cols-3">
                 <div>
                   <label className="font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
-                    Site Location (φ, λ)
+                    Saved Region (φ, λ)
                   </label>
                   <select
-                    value={cityId}
-                    onChange={(e) => setCityId(e.target.value)}
+                    value={regionId}
+                    onChange={(e) => {
+                      const next = resolveRegion(e.target.value);
+                      if (next) setRegionId(next.id);
+                    }}
                     className="mt-1.5 w-full rounded-full border border-white/[0.16] bg-[#05070f] px-3.5 py-1.5 text-xs text-white focus:border-[#ffd166] focus:outline-none"
                   >
-                    {ANCHOR_CITIES.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nameEn} ({c.lat.toFixed(1)}°N)
+                    {SAVED_REGION_LIST.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {isAr ? r.nameAr : r.nameEn} ({r.representativePoint.lat.toFixed(2)}°N)
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
+                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b4b8cb]">
                     Season (δ)
                   </label>
-                  <div className="mt-1.5 flex gap-1">
+                  <div className="apple-segmented mt-1.5 flex w-full" role="group" aria-label="Season">
                     {(['winter', 'spring', 'summer', 'autumn'] as SeasonId[]).map((s) => (
                       <button
                         key={s}
                         type="button"
-                        onClick={() => setSeason(s)}
-                        className={`flex-1 rounded-full py-1.5 text-[11px] capitalize transition ${
-                          season === s
-                            ? 'bg-[#f5a524] font-semibold text-[#221500]'
-                            : 'bg-white/[0.06] text-[#b9bdcf] hover:text-white'
+                        onClick={() => {
+                          setCustomDoy(null);
+                          setCustomDateLabel(null);
+                          setWeatherOverride(null);
+                          setSeason(s);
+                        }}
+                        className={`apple-segment-btn flex-1 px-2 text-[11px] capitalize ${
+                          season === s ? 'active' : ''
                         }`}
                       >
                         {s}
@@ -1861,21 +2033,22 @@ function DigitalTwinContent() {
                 </div>
 
                 <div>
-                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b9bdcf]">
+                  <label className="font-mono text-[11px] uppercase tracking-wider text-[#b4b8cb]">
                     Sky Condition (
                     <i className="font-serif lowercase">k</i>
                     <sub>c</sub>)
                   </label>
-                  <div className="mt-1.5 flex gap-1">
+                  <div className="apple-segmented mt-1.5 flex w-full" role="group" aria-label="Sky Condition">
                     {(['clear', 'dust', 'cloud', 'heatwave'] as SkyCondition[]).map((sk) => (
                       <button
                         key={sk}
                         type="button"
-                        onClick={() => setSkyCondition(sk)}
-                        className={`flex-1 rounded-full py-1.5 text-[11px] capitalize transition ${
-                          skyCondition === sk
-                            ? 'bg-[#3fc1c1] font-semibold text-[#05070f]'
-                            : 'bg-white/[0.06] text-[#b9bdcf] hover:text-white'
+                        onClick={() => {
+                          setWeatherOverride(null);
+                          setSkyCondition(sk);
+                        }}
+                        className={`apple-segment-btn flex-1 px-2 text-[11px] capitalize ${
+                          skyCondition === sk ? 'active' : ''
                         }`}
                       >
                         {sk}
@@ -1890,22 +2063,20 @@ function DigitalTwinContent() {
           {/* Live Telemetry & Complete 6-Node Typeset Equation Ledger Sidebar */}
           <div className="glass flex flex-col justify-between xl:col-span-4">
             <div>
-              <div className="eyebrow">Live Twin Telemetry &amp; Equations</div>
+              <div className="eyebrow">{isAr ? 'قيم المحاكاة والمعادلات' : 'Simulated values & equations'}</div>
               <h2 className="mt-2 font-serif text-2xl font-semibold text-white">
                 {systemKwp} kWp ({panelCount} × {tech})
               </h2>
 
-              <div className="mt-4 space-y-3 rounded-2xl border border-white/[0.14] bg-white/[0.03] p-3.5">
-                <div className="flex gap-1.5">
+              <div className="mt-4 space-y-3 rounded-2xl border border-white/[0.1] bg-[#171c2e]/80 p-3.5">
+                <div className="apple-segmented flex w-full" role="group" aria-label="Panel Technology">
                   {PANEL_TECH_LIST.map((t) => (
                     <button
                       key={t.key}
                       type="button"
                       onClick={() => setTech(t.key)}
-                      className={`flex-1 rounded-full py-1.5 font-mono text-xs transition ${
-                        tech === t.key
-                          ? 'bg-[#f5a524] font-bold text-[#221500]'
-                          : 'bg-white/[0.06] text-[#b9bdcf] hover:text-white'
+                      className={`apple-segment-btn flex-1 font-mono text-xs ${
+                        tech === t.key ? 'active' : ''
                       }`}
                     >
                       {t.key}

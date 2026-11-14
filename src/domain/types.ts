@@ -1,5 +1,5 @@
-// SolarSense Domain Contracts v1.0
-// Framework-free TypeScript module shared by Next.js (Option A) and NestJS (Option B)
+// SolarSense Domain Contracts v2.0 (doc_representation_modifications)
+// Framework-free TypeScript contracts for Digital Twin, 23-Feature Weather & Point Prediction
 
 export type PanelTech = 'pc-Si' | 'a-Si:H/sc-Si' | 'CIGS';
 
@@ -9,11 +9,40 @@ export type RegionId =
   | 'sinai-red-sea'
   | 'nile-valley-upper-egypt';
 
-export type BindingLimit = 'area' | 'budget' | 'demand';
-
 export type SkyCondition = 'clear' | 'dust' | 'cloud' | 'heatwave';
 
 export type SeasonId = 'winter' | 'spring' | 'summer' | 'autumn';
+
+export type FeatureKey =
+  | 't2m'
+  | 'u10'
+  | 'd2m'
+  | 'v10'
+  | 'tcc'
+  | 'lcc'
+  | 'mcc'
+  | 'hcc'
+  | 'sp'
+  | 'tcwv'
+  | 'ssrd'
+  | 'fdir'
+  | 'ssrdc'
+  | 'tp'
+  | 'blh'
+  | 'i10fg'
+  | 'strd'
+  | 'ssr'
+  | 'str'
+  | 'tco3'
+  | 'tciw'
+  | 'tclw'
+  | 'tisr';
+
+export type FeatureProvenance = 'api' | 'calculated' | 'default' | 'edited' | 'preset';
+
+export type FeatureVector23 = Record<FeatureKey, number>;
+
+export type FeatureProvenanceMap = Record<FeatureKey, FeatureProvenance>;
 
 export interface SystemSpec {
   tech: PanelTech;
@@ -37,21 +66,21 @@ export interface SitePoint {
 
 export interface LiveWeatherObservation {
   timestamp: string;
-  provider: 'open-meteo-live' | 'era5-replay-fallback';
+  provider: 'open-meteo-live';
   shortwaveRadiationWm2: number; // ssrd equivalent
   directRadiationWm2: number; // fdir equivalent
   diffuseRadiationWm2: number;
   clearSkyRadiationWm2: number; // ssrdc equivalent
   temperature2mC: number; // t2m
   dewPoint2mC: number; // d2m
-  windSpeed10mKmh: number; // derived from u10, v10
+  windSpeed10mKmh: number;
   windSpeed10mMs: number;
   windDirectionDeg: number;
   cloudCoverPct: number; // tcc
   relativeHumidityPct: number;
   surfacePressureHpa: number; // sp
   precipitationMm: number; // tp
-  dustAod: number; // Khamaseen / aerosol optical depth indicator
+  dustAod: number;
 }
 
 export interface ForecastPoint {
@@ -73,9 +102,8 @@ export interface ForecastResult {
   horizonH: 1 | 6 | 24;
   mode: 'replay' | 'live';
   points: ForecastPoint[];
-  source: 'mock' | 'model';
-  modelName: string;
-  modelVersion: string;
+  source: 'stand-in' | 'model';
+  modelVersion?: string;
 }
 
 export interface YieldResult {
@@ -85,7 +113,7 @@ export interface YieldResult {
   specificYield: number; // kWh / kWp / yr
   performanceRatio: number;
   clearSkyAnnualKwh: number;
-  source: 'mock' | 'atlas';
+  source: 'stand-in' | 'atlas';
 }
 
 export interface PanelTechnologyInfo {
@@ -126,6 +154,7 @@ export interface AnchorCity {
 
 export interface RegionInfo {
   id: RegionId;
+  regionNumber: number;
   code: 'R1' | 'R2' | 'R3' | 'R4';
   nameEn: string;
   nameAr: string;
@@ -140,164 +169,58 @@ export interface RegionInfo {
   avgAnnualGhiKwhM2: number;
   summerPeakTempC: number;
   dustRisk: 'Low' | 'Moderate' | 'High' | 'Extreme (Khamaseen)';
+  albedo: number;
+  representativePoint: {
+    lat: number;
+    lon: number;
+    elevationM: number;
+    labelEn: string;
+    labelAr: string;
+  };
   polygonCoords: [number, number][]; // [lon, lat] ring
 }
 
-export interface TechComparisonRow {
-  tech: PanelTech;
-  nameEn: string;
-  nameAr: string;
-  panelCount: number;
-  kWp: number;
-  roofAreaUsedM2: number;
-  capexEgp: number;
-  itemizedCost: {
-    panelsEgp: number;
-    inverterEgp: number;
-    mountingEgp: number;
-    installationEgp: number;
+export type WeatherEndpointKind = 'forecast' | 'recent' | 'archive';
+
+export interface WeatherContractResponse {
+  region: RegionId;
+  regionNumber: number;
+  representativePoint: {
+    lat: number;
+    lon: number;
+    labelEn: string;
   };
-  annualKwh: number;
-  monthlyKwh: number[];
-  specificYield: number;
-  performanceRatio: number;
-  annualSavingEgp: number;
-  billCoveragePct: number;
-  simplePaybackYears: number;
-  npv25YrEgp: number;
-  co2AvoidedKgYear: number;
-  bindingLimit: BindingLimit;
-  isRecommendedForRegion: boolean;
+  datetimeUtc: string;
+  endpoint: WeatherEndpointKind;
+  endpointLabelEn: string;
+  endpointLabelAr: string;
+  features: FeatureVector23;
+  provenance: FeatureProvenanceMap;
+  missing: FeatureKey[];
 }
 
-export interface EnhancerRecommendation {
-  id: string;
-  titleEn: string;
-  titleAr: string;
-  recommended: boolean;
-  priority: 'high' | 'medium' | 'optional';
-  badgeEn: string;
-  badgeAr: string;
-  reasonEn: string;
-  reasonAr: string;
-  impactMetric: string;
-  estimatedCostEgp?: number;
+export interface PointPredictionRequest {
+  region: RegionId;
+  datetimeUtc: string;
+  panelTech: PanelTech;
+  features: FeatureVector23;
 }
 
-export interface AssessmentInput {
-  tech: PanelTech;
-  lat: number;
-  lon: number;
-  usableAreaM2: number;
-  budgetEgp: number;
-  monthlyBillEgp: number;
-  daytimeSharePct: number;
-  sector: 'residential' | 'commercial';
-}
-
-export interface AssessmentResult {
-  id: string;
-  createdAt: string;
-  site: SitePoint;
-  regionInfo: RegionInfo;
-  input: AssessmentInput;
-  monthlyDemandKwh: number;
-  chosen: TechComparisonRow;
-  allTechnologies: TechComparisonRow[]; // pc-Si, a-Si:H/sc-Si, CIGS side by side
-  sensitivity: {
-    plus20PctBudget: { panelCount: number; kWp: number; annualKwh: number; paybackYears: number };
-    plus10M2Area: { panelCount: number; kWp: number; annualKwh: number; paybackYears: number };
+export interface PointPredictionResponse {
+  prediction: {
+    value: number;
+    unit: string;
+    specificKwPerKwp: number;
+    referenceSystemKwp: number;
   };
-  cashflow25Years: { year: number; cumulativeNetEgp: number; annualSavingEgp: number }[];
-  enhancers: EnhancerRecommendation[];
-  assumptions: {
-    version: string;
-    date: string;
-    tariffSource: string;
-    effectiveTariffEgpPerKwh: number;
-    gridEmissionFactorKgCo2PerKwh: number;
-    discountRatePct: number;
-    annualTariffEscalationPct: number;
-    packingFactor: number;
-    systemLossesPct: number;
+  source: 'model' | 'stand-in';
+  modelVersion?: string;
+  physicsReference: {
+    pClearKw: number;
+    pPhysicsKw: number;
+    gPoaWm2: number;
+    tCellC: number;
+    solarElevationDeg: number;
   };
-  predictionSource: 'mock-physics-atlas' | 'pvlib-ml-service';
+  warnings: string[];
 }
-
-export interface FlexibleLoadItem {
-  id: string;
-  siteId: string;
-  name: string;
-  category: 'pump' | 'hvac' | 'battery' | 'sterilizer' | 'ev';
-  powerKw: number;
-  durationH: number;
-  earliestHour: number; // e.g., 7
-  deadlineHour: number; // e.g., 17
-  priority: 1 | 2 | 3;
-}
-
-export interface ScheduleWindowResult {
-  loadId: string;
-  loadName: string;
-  powerKw: number;
-  durationH: number;
-  recommendedStartHour: number;
-  recommendedEndHour: number;
-  windowLabel: string;
-  requiredEnergyKwh: number;
-  expectedSolarSurplusKwh: number;
-  p10GuaranteedSolarKwh: number;
-  solarCoveragePct: number;
-  p10CoveragePct: number;
-  riskLevel: 'low' | 'medium' | 'high';
-  dieselAvoidedLiters: number;
-  costSavedEgp: number;
-  rationale: string;
-  validatedByEngine: boolean;
-}
-
-export interface ModelBenchmarkEntry {
-  modelKey: 'persistence' | 'smart_persistence' | 'cliper' | 'xgb' | 'lstm' | 'pgnn';
-  modelName: string;
-  region: RegionId | 'all';
-  horizonH: 1 | 6 | 24;
-  stratum: 'overall' | 'clear' | 'dust_khamaseen' | 'coastal_cloud' | 'ramp_hours';
-  maeKw: number;
-  rmseKw: number;
-  nMaePct: number; // normalized by 1000 kW rated capacity
-  nRmsePct: number; // normalized by 1000 kW rated capacity
-  mbeKw: number;
-  r2Daytime: number;
-  skillVsSmartPersistencePct: number;
-  skillVsCliperPct: number;
-  physicallyInvalidPredictionsPct: number;
-  dmTestPValueVsSmartPers: number;
-}
-
-export interface ToolCallTrace {
-  id: string;
-  toolName:
-    | 'get_forecast'
-    | 'get_actuals'
-    | 'get_clear_sky'
-    | 'compare_periods'
-    | 'get_model_skill'
-    | 'recommend_window';
-  args: Record<string, unknown>;
-  outputSummary: string;
-  rawOutput: Record<string, unknown>;
-  durationMs: number;
-}
-
-export interface AssistantReply {
-  messageId: string;
-  createdAt: string;
-  answerMarkdown: string;
-  sources: string[]; // tool_call_ids
-  toolTraces: ToolCallTrace[];
-  riskBanner?: {
-    level: 'low' | 'medium' | 'high';
-    note: string;
-  };
-}
-

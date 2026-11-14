@@ -1,0 +1,46 @@
+{
+  "_comment": "Dataset baseline averages for the 6 ERA5 features without a live Open-Meteo source (strd, ssr, str, tco3, tciw, tclw), plus full 23-feature regional noon baselines in dataset units. Replace with the exact export from the ML team's training pipeline when available.",
+  "version": "2026-11-14-provisional-era5-means",
+  "regions": {
+    "north-coast-delta": {
+      "albedo": 0.20,
+      "defaultsForm": {
+        "strd": 355,
+        "str": -72,
+        "tco3": 292,
+        "tciw": 0.012,
+        "tclw": 0.038
+      }
+    },
+    "western-desert": {
+      "albedo": 0.32,
+      "defaultsForm": {
+        "strd": 340,
+        "str": -108,
+        "tco3": 276,
+        "tciw": 0.002,
+        "tclw": 0.004
+      }
+    },
+    "sinai-red-sea": {
+      "albedo": 0.24,
+      "defaultsForm": {
+        "strd": 348,
+        "str": -92,
+        "tco3": 282,
+        "tciw": 0.005,
+        "tclw": 0.014
+      }
+    },
+    "nile-valley-upper-egypt": {
+      "albedo": 0.26,
+      "defaultsForm": {
+        "strd": 362,
+        "str": -98,
+        "tco3": 278,
+        "tciw": 0.003,
+        "tclw": 0.006
+      }
+    }
+  }
+}

@@ -96,6 +96,33 @@ export interface IrradianceComponents {
   kc: number;
 }
 
+export function calculateClearSky(
+  latDeg: number,
+  lonDeg: number,
+  dayOfYear: number,
+  localHour: number
+): {
+  elevationDeg: number;
+  azimuthDeg: number;
+  extraterrestrialWm2: number;
+  ghiClearWm2: number;
+} {
+  // Use mid-hour (localHour - 0.5) to match ERA5 preceding-hour accumulation
+  const solar = computeSolarPosition(latDeg, lonDeg, localHour - 0.5, dayOfYear);
+  const irr = simulateIrradianceAndPoa({
+    solar,
+    tiltDeg: Math.round(latDeg * 0.9),
+    panelAzimuthDeg: 180,
+    skyCondition: 'clear',
+  });
+  return {
+    elevationDeg: solar.elevationDeg,
+    azimuthDeg: solar.azimuthDeg,
+    extraterrestrialWm2: solar.extraterrestrialWm2,
+    ghiClearWm2: irr.ghiClearWm2,
+  };
+}
+
 export function simulateIrradianceAndPoa(params: {
   solar: SolarPosition;
   tiltDeg: number;
