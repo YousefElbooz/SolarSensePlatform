@@ -1548,20 +1548,24 @@ function DigitalTwinContent() {
           <div>
             <div className="eyebrow">
               {isAr
-                ? 'التوأم الرقمي الهندسي ثلاثي الأبعاد + المعادلات الرياضية الحية'
-                : 'Engineering 3D Digital Twin · Live Mathematical Formulations & Models'}
+                ? 'التوأم الرقمي · محاكاة فيزيائية'
+                : 'Digital twin · physics simulation'}
             </div>
             <h1 className="cinematic-h2 mt-2">
               {isAr ? (
-                'محاكاة فيزيائية حية للمصفوفة، العاكس، البطاريات، الأحمال والشبكة'
+                'نموذج عامل لموقع شمسي، ساعة بساعة'
               ) : (
                 <>
-                  True astronomical sun path,{' '}
-                  <em className="font-normal italic text-[#ffd166]">3D component models</em> &amp;
-                  typeset governing equations
+                  A working model of a solar site,{' '}
+                  <em className="font-normal italic text-[#ffd166]">hour by hour</em>
                 </>
               )}
             </h1>
+            <p className="mt-2 max-w-[64ch] text-[14.5px] leading-relaxed text-[#b4b8cb]">
+              {isAr
+                ? 'حرّك الوقت والموسم وحالة السماء لترى كيف تتغير قدرة الألواح والعاكس والبطارية والحمل والشبكة. كل الأرقام ناتجة عن معادلات فيزيائية وليست قياسات من موقع حقيقي.'
+                : 'Move the time, season and sky to see how the array, inverter, battery, load and grid respond. Every figure is computed from the physics equations shown; none is a measurement from a real site.'}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -1889,7 +1893,7 @@ function DigitalTwinContent() {
           {/* Live Telemetry & Complete 6-Node Typeset Equation Ledger Sidebar */}
           <div className="glass flex flex-col justify-between xl:col-span-4">
             <div>
-              <div className="eyebrow">Live Twin Telemetry &amp; Equations</div>
+              <div className="eyebrow">{isAr ? 'قيم المحاكاة والمعادلات' : 'Simulated values & equations'}</div>
               <h2 className="mt-2 font-serif text-2xl font-semibold text-white">
                 {systemKwp} kWp ({panelCount} × {tech})
               </h2>

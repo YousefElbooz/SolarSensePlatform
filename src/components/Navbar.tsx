@@ -115,7 +115,7 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
 
       <header className="fixed top-0 left-0 right-0 z-40">
         <div className="mx-auto flex max-w-[1520px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/"
               prefetch={true}
@@ -146,7 +146,9 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
                     prefetch={true}
                     onMouseDown={() => setOptimisticHref(item.href)}
                     aria-current={active ? 'page' : undefined}
-                    className={`flex min-h-[32px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[12.5px] tracking-[-0.008em] transition-all duration-150 active:scale-[0.97] ${
+                    aria-label={isAr ? item.labelAr : item.labelEn}
+                    title={isAr ? item.labelAr : item.labelEn}
+                    className={`flex min-h-[32px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12.5px] tracking-[-0.008em] transition-all duration-150 active:scale-[0.97] min-[1440px]:px-3 ${
                       active
                         ? 'bg-white/[0.14] font-semibold text-white shadow-[0_2px_10px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.24)]'
                         : 'font-medium text-[#b4b8cb] hover:bg-white/[0.06] hover:text-white'
@@ -157,7 +159,10 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
                         active ? 'text-[#ffd60a]' : 'text-[#8e93a8]'
                       }`}
                     />
-                    <span>{isAr ? item.labelAr : item.labelEn}</span>
+                    {/* Below 1440px only the current page keeps its label, so nine items never push the controls off screen */}
+                    <span className={active ? '' : 'hidden min-[1440px]:inline'}>
+                      {isAr ? item.labelAr : item.labelEn}
+                    </span>
                   </Link>
                 );
               })}
@@ -180,7 +185,7 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
               <div
                 id="clock"
                 aria-live="off"
-                className="liquid-glass shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 font-mono text-[12px] font-medium tracking-[0.06em] uppercase text-[#f5f5f7]"
+                className="liquid-glass hidden shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 font-mono text-[12px] font-medium tracking-[0.06em] uppercase text-[#f5f5f7] sm:block"
               >
                 {clockLabel}
               </div>
@@ -192,7 +197,7 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
       {/* Phone / Compact Floating Liquid Glass Bottom Tab Bar (tab-bars.md › Phone (iOS)) */}
       <nav
         aria-label="Mobile Navigation"
-        className="liquid-glass fixed bottom-3 left-3 right-3 z-50 flex items-center justify-between gap-1 overflow-x-auto rounded-full px-2 py-1.5 lg:hidden"
+        className="liquid-glass no-scrollbar fixed bottom-3 left-3 right-3 z-50 flex items-center justify-between gap-1 overflow-x-auto rounded-full px-2 py-1.5 lg:hidden"
       >
         {NAV_LINKS.map((item) => {
           const Icon = item.icon;
