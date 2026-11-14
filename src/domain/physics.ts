@@ -10,10 +10,45 @@ export interface SolarPosition {
   zenithDeg: number;
   azimuthDeg: number; // 180 = due south in northern hemisphere
   extraterrestrialWm2: number;
+  pressurePa: number;
+}
+
+export interface SolarPositionOptions {
+  /** Surface pressure in Pascals (Pa), e.g. ERA5 `sp`. Defaults to 101325 Pa. */
+  pressurePa?: number;
+  /** Ambient 2m air temperature in °C (`t2m - 273.15`). Defaults to 25 °C. */
+  tempC?: number;
 }
 
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
+
+/**
+ * Derives Direct Normal Irradiance (DNI, W/m²) from ERA5 `fdir` and solar zenith angle:
+ * Formula: DNI = (fdir / 3600) / cos(zenith)
+ */
+export function deriveDniFromFdir(
+  fdirValue: number,
+  zenithDeg: number,
+  isAccumulatedJm2: boolean = true
+): number {
+  const fdirWm2 = Math.max(0, isAccumulatedJm2 ? fdirValue / 3600 : fdirValue);
+  if (zenithDeg >= 89.5 || fdirWm2 <= 0) return 0;
+  // Clamp cos(zenith) near the horizon (zenith > 85°) to prevent grazing-angle blow-up
+  const cosZenith = Math.max(0.08715, Math.cos(zenithDeg * DEG2RAD));
+  return Math.min(1361, Math.max(0, fdirWm2 / cosZenith));
+}
+
+/**
+ * Computes Relative Humidity (%) from 2m air temperature (°C) and 2m dewpoint temperature (°C)
+ * using the August–Roche–Magnus approximation.
+ */
+export function computeRelativeHumidity(t2mC: number, d2mC: number): number {
+  const clampedDew = Math.min(t2mC, d2mC);
+  const num = Math.exp((17.625 * clampedDew) / (243.04 + clampedDew));
+  const den = Math.exp((17.625 * t2mC) / (243.04 + t2mC));
+  return Math.max(0, Math.min(100, Math.round((num / Math.max(1e-6, den)) * 1000) / 10));
+}
 
 export function getDayOfYear(SeasonOrDate: SeasonId | Date | number): number {
   if (typeof SeasonOrDate === 'number') return SeasonOrDate;
@@ -36,14 +71,20 @@ export function getDayOfYear(SeasonOrDate: SeasonId | Date | number): number {
 
 /**
  * Computes solar elevation, zenith, and azimuth for an Egyptian site at local solar hour.
+ * Supports surface pressure `sp` (Pa) and 2m temperature `t2m` (°C) for atmospheric refraction
+ * matching `pvlib.solarposition.get_solarposition(..., pressure=sp, temperature=t2m)`.
  * Note: For ERA5 hour-ending accumulations, pass (hour - 0.5) per Handover §5.2.
  */
 export function computeSolarPosition(
   latDeg: number,
   lonDeg: number,
   localHour: number,
-  dayOfYear: number = 150
+  dayOfYear: number = 150,
+  options?: SolarPositionOptions
 ): SolarPosition {
+  const pressurePa = options?.pressurePa ?? 101325;
+  const tempC = options?.tempC ?? 25;
+
   const latRad = latDeg * DEG2RAD;
   // Cooper's solar declination equation
   const declDeg = 23.45 * Math.sin(((360 / 365) * (284 + dayOfYear)) * DEG2RAD);
@@ -63,7 +104,19 @@ export function computeSolarPosition(
     Math.cos(latRad) * Math.cos(declRad) * Math.cos(hourAngleRad);
   const clampedSin = Math.max(-1, Math.min(1, sinElev));
   const elevationRad = Math.asin(clampedSin);
-  const elevationDeg = elevationRad * RAD2DEG;
+  const trueElevationDeg = elevationRad * RAD2DEG;
+
+  // Atmospheric refraction correction (Bennett / NREL SPA) scaled by sp (Pa) and t2m (°C)
+  let refractionDeg = 0;
+  if (trueElevationDeg > -1.0 && trueElevationDeg < 85.0) {
+    const tanArg = (trueElevationDeg + 10.3 / (trueElevationDeg + 5.11)) * DEG2RAD;
+    const baseRefrArcMin = 1.02 / Math.max(0.01, Math.tan(tanArg));
+    const pressureRatio = pressurePa / 101000;
+    const tempRatio = 283 / Math.max(200, 273.15 + tempC);
+    refractionDeg = (baseRefrArcMin * pressureRatio * tempRatio) / 60;
+  }
+
+  const elevationDeg = Math.min(90, trueElevationDeg + refractionDeg);
   const zenithDeg = 90 - elevationDeg;
 
   // Solar azimuth (0 = North, 90 = East, 180 = South, 270 = West)
@@ -76,13 +129,14 @@ export function computeSolarPosition(
 
   const eccentricityFactor = 1 + 0.033 * Math.cos(((2 * Math.PI * dayOfYear) / 365));
   const extraterrestrialWm2 =
-    elevationDeg > 0 ? 1361 * eccentricityFactor * Math.max(0, sinElev) : 0;
+    elevationDeg > 0 ? 1361 * eccentricityFactor * Math.max(0, Math.sin(elevationDeg * DEG2RAD)) : 0;
 
   return {
     elevationDeg,
     zenithDeg,
     azimuthDeg,
     extraterrestrialWm2,
+    pressurePa,
   };
 }
 
@@ -100,7 +154,8 @@ export function calculateClearSky(
   latDeg: number,
   lonDeg: number,
   dayOfYear: number,
-  localHour: number
+  localHour: number,
+  pressurePa: number = 101325
 ): {
   elevationDeg: number;
   azimuthDeg: number;
@@ -108,12 +163,13 @@ export function calculateClearSky(
   ghiClearWm2: number;
 } {
   // Use mid-hour (localHour - 0.5) to match ERA5 preceding-hour accumulation
-  const solar = computeSolarPosition(latDeg, lonDeg, localHour - 0.5, dayOfYear);
+  const solar = computeSolarPosition(latDeg, lonDeg, localHour - 0.5, dayOfYear, { pressurePa });
   const irr = simulateIrradianceAndPoa({
     solar,
     tiltDeg: Math.round(latDeg * 0.9),
     panelAzimuthDeg: 180,
     skyCondition: 'clear',
+    pressurePa,
   });
   return {
     elevationDeg: solar.elevationDeg,
@@ -129,8 +185,20 @@ export function simulateIrradianceAndPoa(params: {
   panelAzimuthDeg: number;
   skyCondition: SkyCondition;
   turbidityFactor?: number;
+  /** Forecast albedo `fal` (0–1 fraction) fed into `get_total_irradiance(..., albedo=fal)`. */
+  albedo?: number;
+  /** Surface pressure `sp` in Pascals (Pa) for pressure-corrected airmass `AM_a`. */
+  pressurePa?: number;
 }): IrradianceComponents {
-  const { solar, tiltDeg, panelAzimuthDeg, skyCondition, turbidityFactor = 2.8 } = params;
+  const {
+    solar,
+    tiltDeg,
+    panelAzimuthDeg,
+    skyCondition,
+    turbidityFactor = 2.8,
+    albedo = 0.24,
+    pressurePa = solar.pressurePa ?? 101325,
+  } = params;
   if (solar.elevationDeg <= 0) {
     return {
       ghiClearWm2: 0,
@@ -144,10 +212,11 @@ export function simulateIrradianceAndPoa(params: {
   }
 
   const sinElev = Math.sin(solar.elevationDeg * DEG2RAD);
-  // Kasten-Young air mass
-  const airMass =
+  // Kasten-Young relative air mass + pressure-corrected absolute air mass (AM_a = AM_r * sp / 101325)
+  const relativeAirMass =
     1 /
     (sinElev + 0.50572 * Math.pow(Math.max(0.5, solar.elevationDeg + 6.07995), -1.6364));
+  const airMass = relativeAirMass * (pressurePa / 101325);
 
   // Clear-sky GHI (Ineichen-style atmospheric transmittance)
   const ghiClearWm2 = Math.max(
@@ -172,7 +241,9 @@ export function simulateIrradianceAndPoa(params: {
 
   const ghiWm2 = ghiClearWm2 * kc;
   const dhiWm2 = ghiWm2 * diffuseFraction;
-  const dniWm2 = Math.max(0, (ghiWm2 - dhiWm2) / Math.max(0.08, sinElev));
+  const fdirWm2 = Math.max(0, ghiWm2 - dhiWm2);
+  // Derive DNI from direct horizontal irradiance: DNI = (fdir / 3600) / cos(zenith)
+  const dniWm2 = deriveDniFromFdir(fdirWm2, solar.zenithDeg, false);
 
   // Angle of incidence (AOI) on tilted panel
   const zenithRad = solar.zenithDeg * DEG2RAD;
@@ -185,9 +256,9 @@ export function simulateIrradianceAndPoa(params: {
   const beamPoa = dniWm2 * Math.max(0, cosAoi);
   const skyViewFactor = (1 + Math.cos(tiltRad)) / 2;
   const groundViewFactor = (1 - Math.cos(tiltRad)) / 2;
-  const albedo = 0.24; // Egyptian desert/concrete screed albedo
+  const clampedAlbedo = Math.max(0, Math.min(1, albedo));
   const diffusePoa = dhiWm2 * skyViewFactor;
-  const groundReflectedPoa = ghiWm2 * albedo * groundViewFactor;
+  const groundReflectedPoa = ghiWm2 * clampedAlbedo * groundViewFactor;
 
   const poaWm2 = Math.max(0, beamPoa + diffusePoa + groundReflectedPoa);
   const poaClearWm2 = kc > 0.05 ? poaWm2 / kc : ghiClearWm2;
@@ -212,7 +283,8 @@ export interface PvSimulationStep {
 }
 
 /**
- * Simulates instantaneous AC power using Faiman/NOCT cell temperature + PVWatts thermal model.
+ * Simulates instantaneous AC power using Faiman/NOCT cell temperature + PVWatts thermal model
+ * plus spectral water-vapour (`tcwv`), boundary layer dust mixing (`blh`), and cloud condensate (`tciw, tclw`).
  */
 export function simulatePvPowerStep(params: {
   tech: PanelTech;
@@ -223,6 +295,14 @@ export function simulatePvPowerStep(params: {
   windSpeedMs: number;
   skyCondition?: SkyCondition;
   systemLossesPct?: number;
+  /** Total column water vapour `tcwv` (kg/m²) affecting spectral absorption. */
+  tcwvKgM2?: number;
+  /** Relative humidity (%) derived from `t2m` and `d2m`. */
+  relativeHumidityPct?: number;
+  /** Boundary layer height `blh` (m) correlating with dust/aerosol vertical mixing. */
+  blhM?: number;
+  /** Cloud ice + liquid water (`tciw + tclw`, kg/m²). */
+  cloudWaterKgM2?: number;
 }): PvSimulationStep {
   const {
     tech,
@@ -233,6 +313,9 @@ export function simulatePvPowerStep(params: {
     windSpeedMs,
     skyCondition = 'clear',
     systemLossesPct = 12,
+    tcwvKgM2,
+    blhM,
+    cloudWaterKgM2,
   } = params;
 
   if (poaWm2 <= 1 || kWp <= 0) {
@@ -246,7 +329,7 @@ export function simulatePvPowerStep(params: {
   }
 
   const spec = PANEL_TECHNOLOGIES[tech];
-  // Faiman model with wind cooling & NOCT baseline
+  // Faiman model with wind cooling (Wind = sqrt(u10^2 + v10^2)) & NOCT baseline
   const u0 = 25.0;
   const u1 = 6.84;
   const tCellC = tAmbC + poaWm2 / (u0 + u1 * Math.max(0.5, windSpeedMs));
@@ -254,13 +337,32 @@ export function simulatePvPowerStep(params: {
   const gammaPerC = spec.tempCoeffPctPerC / 100; // e.g., -0.0042 for pc-Si, -0.0026 for HJT
   const tempDerateFactor = Math.max(0.65, 1 + gammaPerC * (tCellC - 25));
 
-  // CIGS has a slight spectral/low-light advantage under diffuse dust/cloud skies
-  const spectralModifier =
+  // Base spectral modifier + precipitable water vapour (tcwv) spectral shift
+  let spectralModifier =
     tech === 'CIGS' && (skyCondition === 'dust' || skyCondition === 'cloud')
       ? 1.035
       : tech === 'a-Si:H/sc-Si'
         ? 1.015
         : 1.0;
+
+  if (typeof tcwvKgM2 === 'number' && Number.isFinite(tcwvKgM2)) {
+    // Higher tcwv absorbs near-IR, slightly favoring wide-bandgap a-Si:H/sc-Si and CIGS over pc-Si
+    const deltaTcwv = (tcwvKgM2 - 15) / 40;
+    if (tech === 'a-Si:H/sc-Si' || tech === 'CIGS') {
+      spectralModifier *= Math.max(0.98, Math.min(1.025, 1 + 0.012 * deltaTcwv));
+    } else {
+      spectralModifier *= Math.max(0.975, Math.min(1.01, 1 - 0.008 * deltaTcwv));
+    }
+  }
+
+  if (typeof blhM === 'number' && Number.isFinite(blhM) && blhM < 400) {
+    // Shallow boundary layer traps near-surface dust/aerosols slightly reducing transmittance
+    spectralModifier *= 0.992;
+  }
+
+  if (typeof cloudWaterKgM2 === 'number' && Number.isFinite(cloudWaterKgM2) && cloudWaterKgM2 > 0.25) {
+    spectralModifier *= Math.max(0.96, 1 - 0.02 * Math.min(1.5, cloudWaterKgM2));
+  }
 
   const lossMultiplier = (1 - systemLossesPct / 100) * 0.965; // inverter efficiency 96.5%
   const pDcKw = kWp * (poaWm2 / 1000) * tempDerateFactor * spectralModifier;
