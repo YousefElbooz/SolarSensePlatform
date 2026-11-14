@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Sun, Box, Activity, Languages } from 'lucide-react';
+import { Sun, Box, Activity, Database, Languages } from 'lucide-react';
 
 type Lang = 'en' | 'ar';
 
@@ -59,6 +59,13 @@ const NAV_LINKS = [
     labelAr: 'اختبار التنبؤ',
     shortEn: 'Predict',
     icon: Activity,
+  },
+  {
+    href: '/preprocessing',
+    labelEn: 'Preprocessing',
+    labelAr: 'معالجة البيانات',
+    shortEn: 'Data',
+    icon: Database,
   },
 ] as const;
 
@@ -174,10 +181,10 @@ export function Navbar({ clockLabel }: { clockLabel?: string }) {
         </div>
       </header>
 
-      {/* Phone Bottom Tab Bar: 3 equal tabs with zero horizontal scrolling */}
+      {/* Phone Bottom Tab Bar: equal tabs with zero horizontal scrolling */}
       <nav
         aria-label="Mobile Navigation"
-        className="liquid-glass fixed bottom-3 left-3 right-3 z-50 grid grid-cols-3 gap-1 rounded-full px-2 py-1.5 md:hidden"
+        className="liquid-glass fixed bottom-3 left-3 right-3 z-50 grid grid-cols-4 gap-1 rounded-full px-2 py-1.5 md:hidden"
       >
         {NAV_LINKS.map((item) => {
           const Icon = item.icon;
